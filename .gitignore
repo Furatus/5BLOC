@@ -13,3 +13,11 @@ states/
 # Optional
 .env
 .env.local
+
+# npm files
+node_modules/
+package-lock.json
+
+# hardhat files 
+cache/
+artifacts/

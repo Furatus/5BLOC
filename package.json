@@ -1,0 +1,35 @@
+{
+  "name": "5bloc",
+  "version": "1.0.0",
+  "description": "Casino roulette with ether",
+  "homepage": "https://github.com/Furatus/5BLOC#readme",
+  "bugs": {
+    "url": "https://github.com/Furatus/5BLOC/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Furatus/5BLOC.git"
+  },
+  "license": "GPL-3.0",
+  "author": "",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@nomicfoundation/hardhat-ethers": "^4.0.4",
+    "@nomicfoundation/hardhat-network-helpers": "^3.0.3",
+    "@openzeppelin/contracts": "^5.4.0",
+    "chai": "^6.2.2",
+    "hardhat": "^3.1.5"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ignition": "^3.0.7",
+    "@nomicfoundation/hardhat-toolbox-viem": "^5.0.2",
+    "@types/node": "^22.19.7",
+    "forge-std": "github:foundry-rs/forge-std#v1.9.4",
+    "typescript": "~5.8.0",
+    "viem": "^2.44.4"
+  }
+}
