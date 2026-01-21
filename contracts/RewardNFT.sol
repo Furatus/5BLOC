@@ -60,8 +60,6 @@ contract RewardNFT is ERC721, Ownable {
         
         uint256 tokenId = _tokenIdCounter++;
         
-        _safeMint(to, tokenId);
-        
         tokenMetadata[tokenId] = RewardMetadata({
             name: name,
             rewardType: rewardType,
@@ -71,7 +69,8 @@ contract RewardNFT is ERC721, Ownable {
             lastTransferAt: block.timestamp
         });
         
-        userInventoryCount[to]++;
+        _safeMint(to, tokenId);
+        
         
         emit RewardMinted(to, tokenId, rewardType, name);
         
@@ -106,7 +105,6 @@ contract RewardNFT is ERC721, Ownable {
         return super._update(to, tokenId, auth);
     }
     
-   
     function getTokenMetadata(uint256 tokenId) 
         external 
         view 
@@ -116,7 +114,6 @@ contract RewardNFT is ERC721, Ownable {
         return tokenMetadata[tokenId];
     }
     
-
     function canReceiveReward(address user) external view returns (bool) {
         return userInventoryCount[user] < MAX_INVENTORY;
     }
