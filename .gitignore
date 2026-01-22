@@ -21,3 +21,4 @@ package-lock.json
 # hardhat files 
 cache/
 artifacts/
+deployments/
