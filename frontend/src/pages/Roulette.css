@@ -559,3 +559,25 @@
     flex-direction: column;
   }
 }
+
+.selected-bet {
+  border: 3px solid yellow !important;
+  box-shadow: 0 0 15px yellow !important;
+  animation: pulse 0.5s infinite alternate;
+}
+
+@keyframes pulse {
+  from {
+    box-shadow: 0 0 10px yellow;
+  }
+  to {
+    box-shadow: 0 0 20px yellow;
+  }
+}
+
+.history-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+}
