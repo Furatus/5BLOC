@@ -121,4 +121,8 @@ contract RewardNFT is ERC721, Ownable {
     function getInventoryCount(address user) external view returns (uint256) {
         return userInventoryCount[user];
     }
+
+    function totalSupply() public view returns (uint256) {
+    return _tokenIdCounter;
+    }
 }

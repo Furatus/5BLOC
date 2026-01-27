@@ -6,6 +6,7 @@ import TradeABI from "../abi/Trade.json";
 export interface TradeOffer {
   offerId: number;
   creator: string;
+  target: string;
   creatorNFT: number;
   requestedNFT: number;
   isActive: boolean;
@@ -13,37 +14,63 @@ export interface TradeOffer {
 }
 
 class TradeService {
-
   private getContract(): Contract {
     const provider = web3Service.getProvider();
-    return new ethers.Contract(
-      CONTRACT_ADDRESSES.Trade,
-      TradeABI.abi,
-      provider,
-    );
-  }
+    const abi = Array.isArray(TradeABI) ? TradeABI : (TradeABI as any).abi;
 
+    if (!abi) {
+      throw new Error("Trade ABI not found");
+    }
+
+    return new ethers.Contract(CONTRACT_ADDRESSES.Trade, abi, provider);
+  }
 
   private async getContractWithSigner(): Promise<Contract> {
     const signer = await web3Service.getSigner();
-    return new ethers.Contract(CONTRACT_ADDRESSES.Trade, TradeABI.abi, signer);
+    const abi = Array.isArray(TradeABI) ? TradeABI : (TradeABI as any).abi;
+
+    if (!abi) {
+      throw new Error("Trade ABI not found");
+    }
+
+    return new ethers.Contract(CONTRACT_ADDRESSES.Trade, abi, signer);
   }
 
- 
-  async createOffer(creatorNFT: number, requestedNFT: number): Promise<number> {
+  async createOffer(
+    creatorNFT: number,
+    requestedNFT: number,
+    targetOwner?: string,
+  ): Promise<number> {
     const contract = await this.getContractWithSigner();
 
-    const tx = await contract.createOffer(creatorNFT, requestedNFT, {
-      gasLimit: 300000,
-    });
+    
+    
+    
+
+    let ownerAddress = targetOwner;
+    if (!ownerAddress) {
+      const nftContract = new ethers.Contract(
+        CONTRACT_ADDRESSES.RewardNFT,
+        ["function ownerOf(uint256) view returns (address)"],
+        web3Service.getProvider(),
+      );
+      ownerAddress = await nftContract.ownerOf(requestedNFT);
+      
+    }
+
+    const tx = await contract.proposeSwap(
+      creatorNFT,
+      requestedNFT,
+      ownerAddress,
+    );
 
     const receipt = await tx.wait();
-
     
+
     const event = receipt.logs?.find((log: any) => {
       try {
         const parsed = contract.interface.parseLog(log);
-        return parsed?.name === "OfferCreated";
+        return parsed?.name === "SwapProposed";
       } catch {
         return false;
       }
@@ -51,118 +78,229 @@ class TradeService {
 
     if (event) {
       const parsed = contract.interface.parseLog(event);
-      return Number(parsed?.args?.offerId);
+      return Number(parsed?.args?.swapId);
     }
 
     return 0;
   }
 
- 
   async acceptOffer(offerId: number): Promise<string> {
     const contract = await this.getContractWithSigner();
 
-    const tx = await contract.acceptOffer(offerId, {
-      gasLimit: 400000,
-    });
+    
+
+    const tx = await contract.acceptSwap(offerId);
 
     const receipt = await tx.wait();
+    
 
     return receipt.hash;
   }
-
 
   async cancelOffer(offerId: number): Promise<string> {
     const contract = await this.getContractWithSigner();
 
-    const tx = await contract.cancelOffer(offerId, {
-      gasLimit: 200000,
-    });
+    
+
+    const tx = await contract.cancelSwap(offerId);
 
     const receipt = await tx.wait();
+    
 
     return receipt.hash;
   }
 
- 
-  async getOffer(offerId: number): Promise<TradeOffer> {
-    const contract = this.getContract();
-    const offer = await contract.getOffer(offerId);
+  async getOffer(offerId: number): Promise<TradeOffer | null> {
+    try {
+      const contract = this.getContract();
+      const swap = await contract.getSwap(offerId);
 
-    return {
-      offerId,
-      creator: offer.creator,
-      creatorNFT: Number(offer.creatorNFT),
-      requestedNFT: Number(offer.requestedNFT),
-      isActive: offer.isActive,
-      createdAt: Number(offer.createdAt),
-    };
+      
+
+      if (swap.proposer === ethers.ZeroAddress) {
+        return null;
+      }
+
+      const offer = {
+        offerId,
+        creator: swap.proposer,
+        target: swap.target,
+        creatorNFT: Number(swap.proposerTokenId),
+        requestedNFT: Number(swap.targetTokenId),
+        isActive: Number(swap.status) === 0, // PENDING = 0
+        createdAt: Number(swap.createdAt),
+      };
+
+      
+
+      return offer;
+    } catch (error) {
+      console.error("Erreur getOffer:", error);
+      return null;
+    }
   }
 
 
   async getActiveOffers(): Promise<TradeOffer[]> {
     const contract = this.getContract();
-    const offerIds = await contract.getActiveOffers();
 
-    const offers = await Promise.all(
-      offerIds.map(async (id: bigint) => {
-        return this.getOffer(Number(id));
-      }),
-    );
+    try {
+      
 
-    return offers;
+      const filterCreated = contract.filters.SwapProposed();
+      const eventsCreated = await contract.queryFilter(
+        filterCreated,
+        0,
+        "latest",
+      );
+
+      
+
+      const offers: TradeOffer[] = [];
+
+      for (const event of eventsCreated) {
+        try {
+          const parsed = contract.interface.parseLog({
+            topics: [...event.topics],
+            data: event.data,
+          });
+
+          if (parsed) {
+            
+            const offerId = Number(parsed.args.swapId);
+            const offer = await this.getOffer(offerId);
+
+            if (offer && offer.isActive) {
+              
+              offers.push(offer);
+            } else {
+              
+            }
+          }
+        } catch (error) {
+          console.error("Erreur parsing event:", error);
+        }
+      }
+
+      
+      return offers;
+    } catch (error) {
+      console.error("Erreur getActiveOffers:", error);
+      return [];
+    }
   }
 
- 
   async getUserOffers(userAddress: string): Promise<TradeOffer[]> {
     const contract = this.getContract();
-    const offerIds = await contract.getUserOffers(userAddress);
 
-    const offers = await Promise.all(
-      offerIds.map(async (id: bigint) => {
-        return this.getOffer(Number(id));
-      }),
-    );
+    try {
+      
 
-    return offers;
+      const swapIds = await contract.getProposerSwaps(userAddress);
+      
+
+      const offers: TradeOffer[] = [];
+
+      for (const swapId of swapIds) {
+        const offer = await this.getOffer(Number(swapId));
+
+        if (offer) {
+          
+          offers.push(offer);
+        }
+      }
+
+      
+      return offers;
+    } catch (error) {
+      console.error("Erreur getUserOffers:", error);
+      return [];
+    }
   }
 
- 
+  async getReceivedOffers(userAddress: string): Promise<TradeOffer[]> {
+    const contract = this.getContract();
+
+    try {
+      const swapIds = await contract.getReceivedSwaps(userAddress);
+      const offers: TradeOffer[] = [];
+
+      for (const swapId of swapIds) {
+        const offer = await this.getOffer(Number(swapId));
+        if (offer) {
+          offers.push(offer);
+        }
+      }
+
+      return offers;
+    } catch (error) {
+      console.error("Erreur getReceivedOffers:", error);
+      return [];
+    }
+  }
+
+  async getPendingOffers(userAddress: string): Promise<TradeOffer[]> {
+    const contract = this.getContract();
+
+    try {
+      const swapIds = await contract.getPendingSwapsForUser(userAddress);
+      const offers: TradeOffer[] = [];
+
+      for (const swapId of swapIds) {
+        const offer = await this.getOffer(Number(swapId));
+        if (offer) {
+          offers.push(offer);
+        }
+      }
+
+      return offers;
+    } catch (error) {
+      console.error("Erreur getPendingOffers:", error);
+      return [];
+    }
+  }
+
   listenToOfferCreated(callback: (event: any) => void): () => void {
     const contract = this.getContract();
 
-    contract.on(
-      "OfferCreated",
-      (offerId, creator, creatorNFT, requestedNFT, event) => {
-        callback({
-          offerId: Number(offerId),
-          creator,
-          creatorNFT: Number(creatorNFT),
-          requestedNFT: Number(requestedNFT),
-          blockNumber: event.log.blockNumber,
-        });
-      },
-    );
+    const listener = (
+      swapId: any,
+      proposer: any,
+      proposerToken: any,
+      receiverToken: any,
+      receiver: any,
+    ) => {
+      callback({
+        offerId: Number(swapId),
+        creator: proposer,
+        creatorNFT: Number(proposerToken),
+        requestedNFT: Number(receiverToken),
+        receiver: receiver,
+      });
+    };
+
+    contract.on("SwapProposed", listener);
 
     return () => {
-      contract.removeAllListeners("OfferCreated");
+      contract.off("SwapProposed", listener);
     };
   }
-
 
   listenToOfferAccepted(callback: (event: any) => void): () => void {
     const contract = this.getContract();
 
-    contract.on("OfferAccepted", (offerId, creator, acceptor, event) => {
+    const listener = (swapId: any, proposer: any, receiver: any) => {
       callback({
-        offerId: Number(offerId),
-        creator,
-        acceptor,
-        blockNumber: event.log.blockNumber,
+        offerId: Number(swapId),
+        creator: proposer,
+        acceptor: receiver,
       });
-    });
+    };
+
+    contract.on("SwapAccepted", listener);
 
     return () => {
-      contract.removeAllListeners("OfferAccepted");
+      contract.off("SwapAccepted", listener);
     };
   }
 }
