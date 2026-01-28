@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import roueCasino from "../images/roue_casino.jpg";
+//import roueCasino from "../images/roue_casino.jpg";
 import "./Roulette.css";
+import RouletteWheel from "../components/RouletteWheel";
 
 import web3Service from "../services/ethersService";
 import rouletteService, { GameResult } from "../services/rouletteService";
@@ -225,14 +226,20 @@ function Roulette() {
         currentBet.number,
       );
 
-      setGameResult(result);
-      setLastNumber(result.result);
-      setHistory((prev) => [...prev.slice(-9), result.result]);
-      setCurrentBet(null);
+      console.log("Résultat obtenu:", result);
 
-      await loadBalance();
+      setLastNumber(result.result);
+
+      setTimeout(() => {
+        setGameResult(result);
+        setHistory((prev) => [...prev.slice(-9), result.result]);
+        setCurrentBet(null);
+        loadBalance();
+        setIsSpinning(false);
+      }, 4500);
     } catch (error: any) {
       console.error("ERREUR:", error);
+      setIsSpinning(false);
 
       if (error.code === 4001) {
         alert(ERROR_MESSAGES.USER_REJECTED);
@@ -243,7 +250,6 @@ function Roulette() {
       }
     } finally {
       setLoading(false);
-      setIsSpinning(false);
     }
   };
 
@@ -336,12 +342,12 @@ function Roulette() {
               </div>
 
               <div className="wheel-container">
-                <img
-                  src={roueCasino}
-                  alt="Roue de roulette"
-                  className="wheel-image"
+                <RouletteWheel
+                  isSpinning={isSpinning}
+                  winningNumber={lastNumber}
+                  onSpinComplete={() => {}}
                 />
-                {loading && (
+                {loading && !isSpinning && (
                   <div
                     style={{
                       position: "absolute",

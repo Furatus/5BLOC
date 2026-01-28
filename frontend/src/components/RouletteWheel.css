@@ -1,0 +1,91 @@
+.roulette-wheel-wrapper {
+  position: relative;
+  width: 350px;
+  height: 350px;
+  margin: 0 auto;
+}
+
+.wheel-pointer {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 30px;
+  color: #FFD700;
+  z-index: 100;
+  filter: drop-shadow(0 0 10px #FFD700);
+}
+
+.roulette-wheel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 8px solid #FFD700;
+  background: radial-gradient(circle, #2a2a2a 0%, #1a1a1a 100%);
+  box-shadow: 
+    0 0 30px rgba(255, 215, 0, 0.6),
+    inset 0 0 30px rgba(0, 0, 0, 0.8);
+  transition: none;
+}
+
+.roulette-wheel.spinning {
+  transition: transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+}
+
+.wheel-number {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  top: 50%;
+  left: 50%;
+  margin-left: -20px;
+  margin-top: -20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 14px;
+  border-radius: 50%;
+  border: 2px solid #FFD700;
+  color: white;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.wheel-number.red {
+  background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+}
+
+.wheel-number.black {
+  background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+}
+
+.wheel-number.green {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.wheel-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 80px;
+  height: 80px;
+  margin-left: -40px;
+  margin-top: -40px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #FFD700 0%, #FFA500 100%);
+  box-shadow: 
+    0 0 20px rgba(255, 215, 0, 0.8),
+    inset 0 0 10px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wheel-center-inner {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
+}
