@@ -581,3 +581,73 @@
   gap: 5px;
   margin-top: 10px;
 }
+
+.roulette-content {
+  padding: 2rem 1rem;
+}
+
+.betting-area {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.simple-bets-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 120px;
+}
+
+.simple-bet-btn {
+  padding: 1.2rem 1.5rem;
+  font-weight: bold;
+  font-size: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: white;
+}
+
+.simple-bet-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+}
+
+.simple-bet-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.simple-bet-btn.red {
+  background: #dc2626;
+}
+
+.simple-bet-btn.black {
+  background: #1f2937;
+}
+
+.simple-bet-btn.neutral {
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid #FFD700;
+}
+
+.simple-bet-btn.selected-bet {
+  border: 3px solid yellow;
+  box-shadow: 0 0 20px yellow;
+}
+
+@media (max-width: 1200px) {
+  .betting-area {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .simple-bets-column {
+    flex-direction: row;
+    width: 100%;
+    max-width: 600px;
+  }
+}

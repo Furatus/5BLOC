@@ -206,46 +206,46 @@ function Roulette() {
   };
 
   const handleSpin = async () => {
-  if (!currentBet) {
-    alert(ERROR_MESSAGES.NO_BET_SELECTED);
-    return;
-  }
-
-  if (isSpinning) {
-    return;
-  }
-
-  try {
-    setIsSpinning(true);
-    setLoading(true);
-    setGameResult(null);
-
-    const result = await rouletteService.buyTicketAndSpin(currentBet.type, currentBet.number);
-    
-
-    setGameResult(result);
-    setLastNumber(result.result);
-    setHistory(prev => [...prev.slice(-9), result.result]);
-    setCurrentBet(null);
-
-    await loadBalance();
-
-   
-  } catch (error: any) {
-    console.error('ERREUR:', error);
-
-    if (error.code === 4001) {
-      alert(ERROR_MESSAGES.USER_REJECTED);
-    } else if (error.message?.includes('insufficient funds')) {
-      alert(ERROR_MESSAGES.INSUFFICIENT_FUNDS);
-    } else {
-      alert(ERROR_MESSAGES.UNKNOWN_ERROR + ': ' + error.message);
+    if (!currentBet) {
+      alert(ERROR_MESSAGES.NO_BET_SELECTED);
+      return;
     }
-  } finally {
-    setLoading(false);
-    setIsSpinning(false);
-  }
-};
+
+    if (isSpinning) {
+      return;
+    }
+
+    try {
+      setIsSpinning(true);
+      setLoading(true);
+      setGameResult(null);
+
+      const result = await rouletteService.buyTicketAndSpin(
+        currentBet.type,
+        currentBet.number,
+      );
+
+      setGameResult(result);
+      setLastNumber(result.result);
+      setHistory((prev) => [...prev.slice(-9), result.result]);
+      setCurrentBet(null);
+
+      await loadBalance();
+    } catch (error: any) {
+      console.error("ERREUR:", error);
+
+      if (error.code === 4001) {
+        alert(ERROR_MESSAGES.USER_REJECTED);
+      } else if (error.message?.includes("insufficient funds")) {
+        alert(ERROR_MESSAGES.INSUFFICIENT_FUNDS);
+      } else {
+        alert(ERROR_MESSAGES.UNKNOWN_ERROR + ": " + error.message);
+      }
+    } finally {
+      setLoading(false);
+      setIsSpinning(false);
+    }
+  };
 
   const handleClear = () => {
     setCurrentBet(null);
@@ -430,70 +430,39 @@ function Roulette() {
             </div>
 
             <div className="betting-area">
-              <div
-                className="simple-bets"
-                style={{ display: "flex", gap: "10px", marginBottom: "10px" }}
-              >
+              <div className="simple-bets-column">
                 <button
                   onClick={() => handleColorBet("red")}
-                  style={{
-                    padding: "10px 20px",
-                    backgroundColor: "#dc2626",
-                    color: "white",
-                    border:
-                      currentBet?.type === BetType.RED
-                        ? "3px solid yellow"
-                        : "none",
-                    borderRadius: "5px",
-                    cursor: "pointer",
-                  }}
+                  className={`simple-bet-btn red ${
+                    currentBet?.type === BetType.RED ? "selected-bet" : ""
+                  }`}
                   disabled={loading}
                 >
                   ROUGE
                 </button>
                 <button
                   onClick={() => handleColorBet("black")}
-                  style={{
-                    padding: "10px 20px",
-                    backgroundColor: "#1f2937",
-                    color: "white",
-                    border:
-                      currentBet?.type === BetType.BLACK
-                        ? "3px solid yellow"
-                        : "none",
-                    borderRadius: "5px",
-                    cursor: "pointer",
-                  }}
+                  className={`simple-bet-btn black ${
+                    currentBet?.type === BetType.BLACK ? "selected-bet" : ""
+                  }`}
                   disabled={loading}
                 >
                   NOIR
                 </button>
                 <button
                   onClick={() => handleEvenOddBet("even")}
-                  style={{
-                    padding: "10px 20px",
-                    border:
-                      currentBet?.type === BetType.EVEN
-                        ? "3px solid yellow"
-                        : "1px solid #ccc",
-                    borderRadius: "5px",
-                    cursor: "pointer",
-                  }}
+                  className={`simple-bet-btn neutral ${
+                    currentBet?.type === BetType.EVEN ? "selected-bet" : ""
+                  }`}
                   disabled={loading}
                 >
                   PAIR
                 </button>
                 <button
                   onClick={() => handleEvenOddBet("odd")}
-                  style={{
-                    padding: "10px 20px",
-                    border:
-                      currentBet?.type === BetType.ODD
-                        ? "3px solid yellow"
-                        : "1px solid #ccc",
-                    borderRadius: "5px",
-                    cursor: "pointer",
-                  }}
+                  className={`simple-bet-btn neutral ${
+                    currentBet?.type === BetType.ODD ? "selected-bet" : ""
+                  }`}
                   disabled={loading}
                 >
                   IMPAIR
