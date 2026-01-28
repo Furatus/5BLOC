@@ -85,12 +85,16 @@ contract Roulette {
         rewardNFT = RewardNFT(_rewardNFTAddress);
     }
 
-    function buyTicketAndBet(
+    function buyTicketAndSpin(
         BetType betType,
         uint8 numberBet
     ) external payable returns (uint256) {
+
         require(msg.value == TICKET_PRICE, "Incorrect ticket price");
+
+
         require(numberBet <= 36, "Number must be between 0 and 36");
+
 
         if (betType == BetType.NUMBER) {
             require(
@@ -100,6 +104,7 @@ contract Roulette {
         } else if (betType == BetType.ZERO) {
             require(numberBet == 0, "Zero bet must specify number 0");
         }
+
 
         uint256 gameId = _gameIdCounter++;
 
@@ -117,14 +122,6 @@ contract Roulette {
 
         emit TicketPurchased(msg.sender, gameId, betType, numberBet);
 
-        return gameId;
-    }
-
-    function spin(uint256 gameId) external {
-        Game storage game = games[gameId];
-
-        require(game.player == msg.sender, "Not your game");
-        require(!game.isPlayed, "Game already played");
 
         uint8 result = uint8(
             uint256(
@@ -139,17 +136,19 @@ contract Roulette {
             ) % 37
         );
 
-        game.result = result;
-        game.isPlayed = true;
+        games[gameId].result = result;
+        games[gameId].isPlayed = true;
 
-        bool hasWon = _checkWin(game.betType, game.numberBet, result);
-        game.hasWon = hasWon;
+        bool hasWon = _checkWin(betType, numberBet, result);
+        games[gameId].hasWon = hasWon;
 
         emit RouletteSpun(gameId, msg.sender, result, hasWon);
 
         if (hasWon) {
-            _distributeReward(msg.sender, game.betType, gameId);
+            _distributeReward(msg.sender, betType, gameId);
         }
+
+        return gameId;
     }
 
     function _checkWin(

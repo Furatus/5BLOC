@@ -1,59 +1,79 @@
-import { useState, useEffect } from 'react';
-import roueCasino from '../images/roue_casino.jpg';
-import './Roulette.css';
+import { useState, useEffect } from "react";
+import roueCasino from "../images/roue_casino.jpg";
+import "./Roulette.css";
 
+import web3Service from "../services/ethersService";
+import rouletteService, { GameResult } from "../services/rouletteService";
 
-import web3Service from '../services/ethersService';
-import rouletteService, { GameResult } from '../services/rouletteService';
-
-
-import { formatAddress } from '../utils/helpers';
-import { BetType } from '../config/contracts';
-import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../utils/constants';
-import Navigation from '../components/Navigation';
+import { formatAddress } from "../utils/helpers";
+import { BetType } from "../config/contracts";
+import { ERROR_MESSAGES, SUCCESS_MESSAGES } from "../utils/constants";
+import Navigation from "../components/Navigation";
 
 function Roulette() {
-  
   const [walletConnected, setWalletConnected] = useState(false);
-  const [walletAddress, setWalletAddress] = useState('');
-  const [balance, setBalance] = useState('0');
+  const [walletAddress, setWalletAddress] = useState("");
+  const [balance, setBalance] = useState("0");
 
-  
-  const [ticketPrice, setTicketPrice] = useState('0');
+  const [ticketPrice, setTicketPrice] = useState("0");
   const [loading, setLoading] = useState(false);
   const [lastNumber, setLastNumber] = useState<number | null>(null);
-  const [currentBet, setCurrentBet] = useState<{ type: number; number: number } | null>(null);
+  const [currentBet, setCurrentBet] = useState<{
+    type: number;
+    number: number;
+  } | null>(null);
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
   const [history, setHistory] = useState<number[]>([]);
+  const [isSpinning, setIsSpinning] = useState(false);
 
-  
   const rouletteNumbers = [
-    { num: 0, color: 'green' },
-    { num: 1, color: 'red' }, { num: 2, color: 'black' }, { num: 3, color: 'red' },
-    { num: 4, color: 'black' }, { num: 5, color: 'red' }, { num: 6, color: 'black' },
-    { num: 7, color: 'red' }, { num: 8, color: 'black' }, { num: 9, color: 'red' },
-    { num: 10, color: 'black' }, { num: 11, color: 'black' }, { num: 12, color: 'red' },
-    { num: 13, color: 'black' }, { num: 14, color: 'red' }, { num: 15, color: 'black' },
-    { num: 16, color: 'red' }, { num: 17, color: 'black' }, { num: 18, color: 'red' },
-    { num: 19, color: 'red' }, { num: 20, color: 'black' }, { num: 21, color: 'red' },
-    { num: 22, color: 'black' }, { num: 23, color: 'red' }, { num: 24, color: 'black' },
-    { num: 25, color: 'red' }, { num: 26, color: 'black' }, { num: 27, color: 'red' },
-    { num: 28, color: 'black' }, { num: 29, color: 'black' }, { num: 30, color: 'red' },
-    { num: 31, color: 'black' }, { num: 32, color: 'red' }, { num: 33, color: 'black' },
-    { num: 34, color: 'red' }, { num: 35, color: 'black' }, { num: 36, color: 'red' },
+    { num: 0, color: "green" },
+    { num: 1, color: "red" },
+    { num: 2, color: "black" },
+    { num: 3, color: "red" },
+    { num: 4, color: "black" },
+    { num: 5, color: "red" },
+    { num: 6, color: "black" },
+    { num: 7, color: "red" },
+    { num: 8, color: "black" },
+    { num: 9, color: "red" },
+    { num: 10, color: "black" },
+    { num: 11, color: "black" },
+    { num: 12, color: "red" },
+    { num: 13, color: "black" },
+    { num: 14, color: "red" },
+    { num: 15, color: "black" },
+    { num: 16, color: "red" },
+    { num: 17, color: "black" },
+    { num: 18, color: "red" },
+    { num: 19, color: "red" },
+    { num: 20, color: "black" },
+    { num: 21, color: "red" },
+    { num: 22, color: "black" },
+    { num: 23, color: "red" },
+    { num: 24, color: "black" },
+    { num: 25, color: "red" },
+    { num: 26, color: "black" },
+    { num: 27, color: "red" },
+    { num: 28, color: "black" },
+    { num: 29, color: "black" },
+    { num: 30, color: "red" },
+    { num: 31, color: "black" },
+    { num: 32, color: "red" },
+    { num: 33, color: "black" },
+    { num: 34, color: "red" },
+    { num: 35, color: "black" },
+    { num: 36, color: "red" },
   ];
 
   const row1 = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36];
   const row2 = [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35];
   const row3 = [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34];
 
-  
   useEffect(() => {
-    
     web3Service.onAccountsChanged(handleAccountsChanged);
     web3Service.onChainChanged(handleChainChanged);
 
-    
     checkIfWalletIsConnected();
 
     return () => {
@@ -61,7 +81,6 @@ function Roulette() {
     };
   }, []);
 
-  
   useEffect(() => {
     if (walletConnected && walletAddress) {
       loadTicketPrice();
@@ -82,16 +101,14 @@ function Roulette() {
           setWalletAddress(address);
         }
       }
-    } catch (error) {
-      
-    }
+    } catch (error) {}
   };
 
   const handleAccountsChanged = (accounts: string[]) => {
     if (accounts.length === 0) {
       setWalletConnected(false);
-      setWalletAddress('');
-      setBalance('0');
+      setWalletAddress("");
+      setBalance("0");
     } else {
       setWalletAddress(accounts[0]);
       loadBalance();
@@ -99,11 +116,9 @@ function Roulette() {
     }
   };
 
-
   const handleChainChanged = () => {
     window.location.reload();
   };
-
 
   const connectWallet = async () => {
     try {
@@ -112,28 +127,26 @@ function Roulette() {
       setWalletAddress(address);
       console.log(SUCCESS_MESSAGES.WALLET_CONNECTED);
     } catch (error: any) {
-      console.error('Erreur connexion wallet:', error);
+      console.error("Erreur connexion wallet:", error);
       alert(error.message || ERROR_MESSAGES.WALLET_NOT_CONNECTED);
     }
   };
-
 
   const loadTicketPrice = async () => {
     try {
       const price = await rouletteService.getTicketPrice();
       setTicketPrice(price);
     } catch (error) {
-      console.error('Erreur chargement prix:', error);
+      console.error("Erreur chargement prix:", error);
     }
   };
-
 
   const loadBalance = async () => {
     try {
       const bal = await web3Service.getBalance(walletAddress);
       setBalance(bal);
     } catch (error) {
-      console.error('Erreur chargement balance:', error);
+      console.error("Erreur chargement balance:", error);
     }
   };
 
@@ -141,12 +154,12 @@ function Roulette() {
     try {
       const games = await rouletteService.getPlayerGames(walletAddress);
       const results = games
-        .filter(game => game.result !== undefined)
-        .map(game => game.result)
-        .slice(-10); 
+        .filter((game) => game.result !== undefined)
+        .map((game) => game.result)
+        .slice(-10);
       setHistory(results);
     } catch (error) {
-      console.error('Erreur chargement historique:', error);
+      console.error("Erreur chargement historique:", error);
     }
   };
 
@@ -158,110 +171,118 @@ function Roulette() {
     }
   };
 
-  const handleColorBet = (color: 'red' | 'black') => {
+  const handleColorBet = (color: "red" | "black") => {
     setCurrentBet({
-      type: color === 'red' ? BetType.RED : BetType.BLACK,
+      type: color === "red" ? BetType.RED : BetType.BLACK,
       number: 0,
     });
   };
 
- 
-  const handleEvenOddBet = (type: 'even' | 'odd') => {
+  const handleEvenOddBet = (type: "even" | "odd") => {
     setCurrentBet({
-      type: type === 'even' ? BetType.EVEN : BetType.ODD,
+      type: type === "even" ? BetType.EVEN : BetType.ODD,
       number: 0,
     });
   };
-
 
   const handleDozenBet = (dozen: 1 | 2 | 3) => {
-    const betType = dozen === 1 ? BetType.DOZEN_1 : dozen === 2 ? BetType.DOZEN_2 : BetType.DOZEN_3;
+    const betType =
+      dozen === 1
+        ? BetType.DOZEN_1
+        : dozen === 2
+        ? BetType.DOZEN_2
+        : BetType.DOZEN_3;
     setCurrentBet({ type: betType, number: 0 });
   };
-
 
   const handleColumnBet = (column: 1 | 2 | 3) => {
-    const betType = column === 1 ? BetType.COLUMN_1 : column === 2 ? BetType.COLUMN_2 : BetType.COLUMN_3;
+    const betType =
+      column === 1
+        ? BetType.COLUMN_1
+        : column === 2
+        ? BetType.COLUMN_2
+        : BetType.COLUMN_3;
     setCurrentBet({ type: betType, number: 0 });
   };
 
-
   const handleSpin = async () => {
-    if (!currentBet) {
-      alert(ERROR_MESSAGES.NO_BET_SELECTED);
-      return;
+  if (!currentBet) {
+    alert(ERROR_MESSAGES.NO_BET_SELECTED);
+    return;
+  }
+
+  if (isSpinning) {
+    console.log('Spin déjà en cours, ignoré');
+    return;
+  }
+
+  try {
+    setIsSpinning(true);
+    setLoading(true);
+    setGameResult(null);
+
+    console.log('Lancement de la roulette...');
+    console.log('Pari:', currentBet);
+
+    // Une seule transaction pour tout faire
+    const result = await rouletteService.buyTicketAndSpin(currentBet.type, currentBet.number);
+    
+    console.log('Résultat obtenu:', result);
+
+    setGameResult(result);
+    setLastNumber(result.result);
+    setHistory(prev => [...prev.slice(-9), result.result]);
+    setCurrentBet(null);
+
+    await loadBalance();
+
+    if (result.hasWon) {
+      console.log('GAGNÉ!');
+    } else {
+      console.log('Perdu');
     }
+  } catch (error: any) {
+    console.error('ERREUR:', error);
 
-    try {
-      setLoading(true);
-      setGameResult(null);
-
-      console.log('Achat du ticket...');
-      const gameId = await rouletteService.buyTicketAndBet(currentBet.type, currentBet.number);
-      console.log(`Ticket acheté! Game ID: ${gameId}`);
-
-      console.log('Lancement de la roulette...');
-      const result = await rouletteService.spin(gameId);
-      console.log('Résultat:', result);
-
-      setGameResult(result);
-      setLastNumber(result.result);
-      setHistory(prev => [...prev.slice(-9), result.result]);
-      setCurrentBet(null);
-
-      
-      await loadBalance();
-
-      
-      if (result.hasWon) {
-        console.log(SUCCESS_MESSAGES.WIN);
-      }
-    } catch (error: any) {
-      console.error('Erreur:', error);
-
-      if (error.code === 4001) {
-        alert(ERROR_MESSAGES.USER_REJECTED);
-      } else if (error.code === -32603) {
-        alert(ERROR_MESSAGES.CONTRACT_ERROR + ': ' + (error.data?.message || error.message));
-      } else if (error.message?.includes('insufficient funds')) {
-        alert(ERROR_MESSAGES.INSUFFICIENT_FUNDS);
-      } else {
-        alert(ERROR_MESSAGES.UNKNOWN_ERROR + ': ' + error.message);
-      }
-    } finally {
-      setLoading(false);
+    if (error.code === 4001) {
+      alert(ERROR_MESSAGES.USER_REJECTED);
+    } else if (error.message?.includes('insufficient funds')) {
+      alert(ERROR_MESSAGES.INSUFFICIENT_FUNDS);
+    } else {
+      alert(ERROR_MESSAGES.UNKNOWN_ERROR + ': ' + error.message);
     }
-  };
-
+  } finally {
+    setLoading(false);
+    setIsSpinning(false);
+  }
+};
 
   const handleClear = () => {
     setCurrentBet(null);
     setGameResult(null);
   };
 
-
   const getNumberColor = (num: number): string => {
-    const numData = rouletteNumbers.find(n => n.num === num);
-    return numData?.color || 'green';
+    const numData = rouletteNumbers.find((n) => n.num === num);
+    return numData?.color || "green";
   };
-
 
   const getBetTypeName = (betType: number): string => {
     const names: { [key: number]: string } = {
-      [BetType.RED]: 'ROUGE',
-      [BetType.BLACK]: 'NOIR',
-      [BetType.EVEN]: 'PAIR',
-      [BetType.ODD]: 'IMPAIR',
-      [BetType.DOZEN_1]: '1-12',
-      [BetType.DOZEN_2]: '13-24',
-      [BetType.DOZEN_3]: '25-36',
-      [BetType.COLUMN_1]: 'Colonne 1',
-      [BetType.COLUMN_2]: 'Colonne 2',
-      [BetType.COLUMN_3]: 'Colonne 3',
-      [BetType.NUMBER]: 'Numéro',
-      [BetType.ZERO]: 'ZÉRO',
+      [BetType.RED]: "ROUGE",
+      [BetType.BLACK]: "NOIR",
+      [BetType.EVEN]: "PAIR",
+      [BetType.ODD]: "IMPAIR",
+      [BetType.DOZEN_1]: "1-12",
+      [BetType.DOZEN_2]: "13-24",
+      [BetType.DOZEN_3]: "25-36",
+      [BetType.COLUMN_1]: "Colonne 1",
+      [BetType.COLUMN_2]: "Colonne 2",
+      [BetType.COLUMN_3]: "Colonne 3",
+      [BetType.NUMBER]: "Numéro",
+      [BetType.ZERO]: "ZÉRO",
     };
-    return names[betType] || 'Inconnu';
+    return names[betType] || "Inconnu";
   };
 
   return (
@@ -270,7 +291,9 @@ function Roulette() {
         <h1>Casino</h1>
         <Navigation />
         <button className="wallet-button" onClick={connectWallet}>
-          {walletConnected ? formatAddress(walletAddress) : 'Connecter MetaMask'}
+          {walletConnected
+            ? formatAddress(walletAddress)
+            : "Connecter MetaMask"}
         </button>
       </header>
 
@@ -279,52 +302,75 @@ function Roulette() {
           <div className="connect-prompt">
             <h2>Connectez votre wallet pour jouer</h2>
             <p>Utilisez MetaMask ou un wallet compatible Ethereum</p>
-            <button onClick={connectWallet} style={{ padding: '15px 30px', fontSize: '18px', marginTop: '20px' }}>
+            <button
+              onClick={connectWallet}
+              style={{
+                padding: "15px 30px",
+                fontSize: "18px",
+                marginTop: "20px",
+              }}
+            >
               Connecter MetaMask
             </button>
           </div>
         ) : (
           <div className="game-container">
-            
             <div className="top-section">
               <div className="info-left">
                 <div className="last-number-display">
-                  <div className={`number-box ${lastNumber !== null ? getNumberColor(lastNumber) : ''}`}>
-                    {lastNumber !== null ? lastNumber : '--'}
+                  <div
+                    className={`number-box ${
+                      lastNumber !== null ? getNumberColor(lastNumber) : ""
+                    }`}
+                  >
+                    {lastNumber !== null ? lastNumber : "--"}
                   </div>
                 </div>
                 <div className="limits">
                   <p>TICKET: {ticketPrice} ETH</p>
                   <p>SOLDE: {parseFloat(balance).toFixed(4)} ETH</p>
                   {currentBet && (
-                    <p style={{ color: '#4ade80', fontWeight: 'bold', marginTop: '10px' }}>
+                    <p
+                      style={{
+                        color: "#4ade80",
+                        fontWeight: "bold",
+                        marginTop: "10px",
+                      }}
+                    >
                       Pari: {getBetTypeName(currentBet.type)}
-                      {currentBet.type === BetType.NUMBER && ` (${currentBet.number})`}
+                      {currentBet.type === BetType.NUMBER &&
+                        ` (${currentBet.number})`}
                     </p>
                   )}
                 </div>
               </div>
 
               <div className="wheel-container">
-                <img src={roueCasino} alt="Roue de roulette" className="wheel-image" />
+                <img
+                  src={roueCasino}
+                  alt="Roue de roulette"
+                  className="wheel-image"
+                />
                 {loading && (
                   <div
                     style={{
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      transform: 'translate(-50%, -50%)',
-                      color: 'white',
-                      fontSize: '24px',
-                      fontWeight: 'bold',
-                      background: 'rgba(0,0,0,0.8)',
-                      padding: '20px',
-                      borderRadius: '10px',
-                      textAlign: 'center',
+                      position: "absolute",
+                      top: "50%",
+                      left: "50%",
+                      transform: "translate(-50%, -50%)",
+                      color: "white",
+                      fontSize: "24px",
+                      fontWeight: "bold",
+                      background: "rgba(0,0,0,0.8)",
+                      padding: "20px",
+                      borderRadius: "10px",
+                      textAlign: "center",
                     }}
                   >
                     <div>Transaction en cours...</div>
-                    <div style={{ fontSize: '14px', marginTop: '10px' }}>Vérifiez MetaMask</div>
+                    <div style={{ fontSize: "14px", marginTop: "10px" }}>
+                      Vérifiez MetaMask
+                    </div>
                   </div>
                 )}
               </div>
@@ -338,15 +384,15 @@ function Roulette() {
                         key={index}
                         className={`history-number ${getNumberColor(num)}`}
                         style={{
-                          width: '30px',
-                          height: '30px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          borderRadius: '50%',
-                          color: 'white',
-                          fontSize: '12px',
-                          fontWeight: 'bold',
+                          width: "30px",
+                          height: "30px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderRadius: "50%",
+                          color: "white",
+                          fontSize: "12px",
+                          fontWeight: "bold",
                         }}
                       >
                         {num}
@@ -356,19 +402,35 @@ function Roulette() {
                   {gameResult && (
                     <div
                       style={{
-                        marginTop: '15px',
-                        padding: '10px',
-                        backgroundColor: gameResult.hasWon ? '#4ade80' : '#f87171',
-                        borderRadius: '5px',
-                        color: 'white',
-                        textAlign: 'center',
+                        marginTop: "15px",
+                        padding: "10px",
+                        backgroundColor: gameResult.hasWon
+                          ? "#4ade80"
+                          : "#f87171",
+                        borderRadius: "5px",
+                        color: "white",
+                        textAlign: "center",
                       }}
                     >
-                      <p style={{ fontWeight: 'bold', fontSize: '16px', margin: '5px 0' }}>
-                        {gameResult.hasWon ? 'GAGNÉ !' : 'PERDU'}
+                      <p
+                        style={{
+                          fontWeight: "bold",
+                          fontSize: "16px",
+                          margin: "5px 0",
+                        }}
+                      >
+                        {gameResult.hasWon ? "GAGNÉ !" : "PERDU"}
                       </p>
-                      <p style={{ fontSize: '12px', margin: '5px 0' }}>Numéro: {gameResult.result}</p>
-                      <p style={{ fontSize: '10px', margin: '5px 0', wordBreak: 'break-all' }}>
+                      <p style={{ fontSize: "12px", margin: "5px 0" }}>
+                        Numéro: {gameResult.result}
+                      </p>
+                      <p
+                        style={{
+                          fontSize: "10px",
+                          margin: "5px 0",
+                          wordBreak: "break-all",
+                        }}
+                      >
                         TX: {gameResult.txHash?.slice(0, 10)}...
                       </p>
                     </div>
@@ -377,57 +439,70 @@ function Roulette() {
               </div>
             </div>
 
-            
             <div className="betting-area">
-              
-              <div className="simple-bets" style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+              <div
+                className="simple-bets"
+                style={{ display: "flex", gap: "10px", marginBottom: "10px" }}
+              >
                 <button
-                  onClick={() => handleColorBet('red')}
+                  onClick={() => handleColorBet("red")}
                   style={{
-                    padding: '10px 20px',
-                    backgroundColor: '#dc2626',
-                    color: 'white',
-                    border: currentBet?.type === BetType.RED ? '3px solid yellow' : 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer',
+                    padding: "10px 20px",
+                    backgroundColor: "#dc2626",
+                    color: "white",
+                    border:
+                      currentBet?.type === BetType.RED
+                        ? "3px solid yellow"
+                        : "none",
+                    borderRadius: "5px",
+                    cursor: "pointer",
                   }}
                   disabled={loading}
                 >
                   ROUGE
                 </button>
                 <button
-                  onClick={() => handleColorBet('black')}
+                  onClick={() => handleColorBet("black")}
                   style={{
-                    padding: '10px 20px',
-                    backgroundColor: '#1f2937',
-                    color: 'white',
-                    border: currentBet?.type === BetType.BLACK ? '3px solid yellow' : 'none',
-                    borderRadius: '5px',
-                    cursor: 'pointer',
+                    padding: "10px 20px",
+                    backgroundColor: "#1f2937",
+                    color: "white",
+                    border:
+                      currentBet?.type === BetType.BLACK
+                        ? "3px solid yellow"
+                        : "none",
+                    borderRadius: "5px",
+                    cursor: "pointer",
                   }}
                   disabled={loading}
                 >
                   NOIR
                 </button>
                 <button
-                  onClick={() => handleEvenOddBet('even')}
+                  onClick={() => handleEvenOddBet("even")}
                   style={{
-                    padding: '10px 20px',
-                    border: currentBet?.type === BetType.EVEN ? '3px solid yellow' : '1px solid #ccc',
-                    borderRadius: '5px',
-                    cursor: 'pointer',
+                    padding: "10px 20px",
+                    border:
+                      currentBet?.type === BetType.EVEN
+                        ? "3px solid yellow"
+                        : "1px solid #ccc",
+                    borderRadius: "5px",
+                    cursor: "pointer",
                   }}
                   disabled={loading}
                 >
                   PAIR
                 </button>
                 <button
-                  onClick={() => handleEvenOddBet('odd')}
+                  onClick={() => handleEvenOddBet("odd")}
                   style={{
-                    padding: '10px 20px',
-                    border: currentBet?.type === BetType.ODD ? '3px solid yellow' : '1px solid #ccc',
-                    borderRadius: '5px',
-                    cursor: 'pointer',
+                    padding: "10px 20px",
+                    border:
+                      currentBet?.type === BetType.ODD
+                        ? "3px solid yellow"
+                        : "1px solid #ccc",
+                    borderRadius: "5px",
+                    cursor: "pointer",
                   }}
                   disabled={loading}
                 >
@@ -435,13 +510,14 @@ function Roulette() {
                 </button>
               </div>
 
-              
               <div className="betting-table">
-                
                 <div className="zero-section">
                   <button
                     className={`number-cell green ${
-                      currentBet?.type === BetType.ZERO && currentBet.number === 0 ? 'selected-bet' : ''
+                      currentBet?.type === BetType.ZERO &&
+                      currentBet.number === 0
+                        ? "selected-bet"
+                        : ""
                     }`}
                     onClick={() => handleNumberClick(0)}
                     disabled={loading}
@@ -450,15 +526,16 @@ function Roulette() {
                   </button>
                 </div>
 
-                
                 <div className="numbers-grid">
-                  
                   <div className="numbers-row">
-                    {row1.map(num => (
+                    {row1.map((num) => (
                       <button
                         key={num}
                         className={`number-cell ${getNumberColor(num)} ${
-                          currentBet?.type === BetType.NUMBER && currentBet.number === num ? 'selected-bet' : ''
+                          currentBet?.type === BetType.NUMBER &&
+                          currentBet.number === num
+                            ? "selected-bet"
+                            : ""
                         }`}
                         onClick={() => handleNumberClick(num)}
                         disabled={loading}
@@ -467,7 +544,11 @@ function Roulette() {
                       </button>
                     ))}
                     <button
-                      className={`column-bet ${currentBet?.type === BetType.COLUMN_1 ? 'selected-bet' : ''}`}
+                      className={`column-bet ${
+                        currentBet?.type === BetType.COLUMN_1
+                          ? "selected-bet"
+                          : ""
+                      }`}
                       onClick={() => handleColumnBet(1)}
                       disabled={loading}
                     >
@@ -475,13 +556,15 @@ function Roulette() {
                     </button>
                   </div>
 
-                  
                   <div className="numbers-row">
-                    {row2.map(num => (
+                    {row2.map((num) => (
                       <button
                         key={num}
                         className={`number-cell ${getNumberColor(num)} ${
-                          currentBet?.type === BetType.NUMBER && currentBet.number === num ? 'selected-bet' : ''
+                          currentBet?.type === BetType.NUMBER &&
+                          currentBet.number === num
+                            ? "selected-bet"
+                            : ""
                         }`}
                         onClick={() => handleNumberClick(num)}
                         disabled={loading}
@@ -490,7 +573,11 @@ function Roulette() {
                       </button>
                     ))}
                     <button
-                      className={`column-bet ${currentBet?.type === BetType.COLUMN_2 ? 'selected-bet' : ''}`}
+                      className={`column-bet ${
+                        currentBet?.type === BetType.COLUMN_2
+                          ? "selected-bet"
+                          : ""
+                      }`}
                       onClick={() => handleColumnBet(2)}
                       disabled={loading}
                     >
@@ -498,13 +585,15 @@ function Roulette() {
                     </button>
                   </div>
 
-                  
                   <div className="numbers-row">
-                    {row3.map(num => (
+                    {row3.map((num) => (
                       <button
                         key={num}
                         className={`number-cell ${getNumberColor(num)} ${
-                          currentBet?.type === BetType.NUMBER && currentBet.number === num ? 'selected-bet' : ''
+                          currentBet?.type === BetType.NUMBER &&
+                          currentBet.number === num
+                            ? "selected-bet"
+                            : ""
                         }`}
                         onClick={() => handleNumberClick(num)}
                         disabled={loading}
@@ -513,7 +602,11 @@ function Roulette() {
                       </button>
                     ))}
                     <button
-                      className={`column-bet ${currentBet?.type === BetType.COLUMN_3 ? 'selected-bet' : ''}`}
+                      className={`column-bet ${
+                        currentBet?.type === BetType.COLUMN_3
+                          ? "selected-bet"
+                          : ""
+                      }`}
                       onClick={() => handleColumnBet(3)}
                       disabled={loading}
                     >
@@ -521,24 +614,35 @@ function Roulette() {
                     </button>
                   </div>
 
-                  
                   <div className="dozen-row">
                     <button
-                      className={`dozen-bet ${currentBet?.type === BetType.DOZEN_1 ? 'selected-bet' : ''}`}
+                      className={`dozen-bet ${
+                        currentBet?.type === BetType.DOZEN_1
+                          ? "selected-bet"
+                          : ""
+                      }`}
                       onClick={() => handleDozenBet(1)}
                       disabled={loading}
                     >
                       1st 12
                     </button>
                     <button
-                      className={`dozen-bet ${currentBet?.type === BetType.DOZEN_2 ? 'selected-bet' : ''}`}
+                      className={`dozen-bet ${
+                        currentBet?.type === BetType.DOZEN_2
+                          ? "selected-bet"
+                          : ""
+                      }`}
                       onClick={() => handleDozenBet(2)}
                       disabled={loading}
                     >
                       2nd 12
                     </button>
                     <button
-                      className={`dozen-bet ${currentBet?.type === BetType.DOZEN_3 ? 'selected-bet' : ''}`}
+                      className={`dozen-bet ${
+                        currentBet?.type === BetType.DOZEN_3
+                          ? "selected-bet"
+                          : ""
+                      }`}
                       onClick={() => handleDozenBet(3)}
                       disabled={loading}
                     >
@@ -546,13 +650,20 @@ function Roulette() {
                     </button>
                   </div>
 
-                  
                   <div className="action-buttons">
-                    <button className="action-btn clear-btn" onClick={handleClear} disabled={loading}>
+                    <button
+                      className="action-btn clear-btn"
+                      onClick={handleClear}
+                      disabled={loading}
+                    >
                       Effacer
                     </button>
-                    <button className="action-btn spin-btn" onClick={handleSpin} disabled={loading || !currentBet}>
-                      {loading ? 'EN COURS...' : 'LANCER'}
+                    <button
+                      className="action-btn spin-btn"
+                      onClick={handleSpin}
+                      disabled={loading || !currentBet}
+                    >
+                      {loading ? "EN COURS..." : "LANCER"}
                     </button>
                   </div>
                 </div>
