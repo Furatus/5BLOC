@@ -212,7 +212,6 @@ function Roulette() {
   }
 
   if (isSpinning) {
-    console.log('Spin déjà en cours, ignoré');
     return;
   }
 
@@ -221,13 +220,8 @@ function Roulette() {
     setLoading(true);
     setGameResult(null);
 
-    console.log('Lancement de la roulette...');
-    console.log('Pari:', currentBet);
-
-    // Une seule transaction pour tout faire
     const result = await rouletteService.buyTicketAndSpin(currentBet.type, currentBet.number);
     
-    console.log('Résultat obtenu:', result);
 
     setGameResult(result);
     setLastNumber(result.result);
@@ -236,11 +230,7 @@ function Roulette() {
 
     await loadBalance();
 
-    if (result.hasWon) {
-      console.log('GAGNÉ!');
-    } else {
-      console.log('Perdu');
-    }
+   
   } catch (error: any) {
     console.error('ERREUR:', error);
 
