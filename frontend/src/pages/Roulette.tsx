@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
-//import roueCasino from "../images/roue_casino.jpg";
 import "./Roulette.css";
 import RouletteWheel from "../components/RouletteWheel";
 
 import web3Service from "../services/ethersService";
-import rouletteService, { GameResult } from "../services/rouletteService";
+import rouletteService, { GameResult, CooldownInfo } from "../services/rouletteService";
 
 import { formatAddress } from "../utils/helpers";
 import { BetType } from "../config/contracts";
@@ -26,6 +25,12 @@ function Roulette() {
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
   const [history, setHistory] = useState<number[]>([]);
   const [isSpinning, setIsSpinning] = useState(false);
+
+  const [cooldown, setCooldown] = useState<CooldownInfo>({
+    isActive: false,
+    remainingSeconds: 0,
+    winStreak: 0,
+  });
 
   const rouletteNumbers = [
     { num: 0, color: "green" },
@@ -87,12 +92,42 @@ function Roulette() {
       loadTicketPrice();
       loadBalance();
       loadHistory();
+      loadCooldown();
     }
   }, [walletConnected, walletAddress]);
 
-  /**
-   * Vérifie si le wallet est déjà connecté
-   */
+  // Timer pour décrémenter le cooldown localement
+  useEffect(() => {
+    if (!cooldown.isActive || cooldown.remainingSeconds <= 0) return;
+
+    const timer = setInterval(() => {
+      setCooldown((prev) => {
+        const newRemaining = prev.remainingSeconds - 1;
+        if (newRemaining <= 0) {
+          return { ...prev, isActive: false, remainingSeconds: 0 };
+        }
+        return { ...prev, remainingSeconds: newRemaining };
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [cooldown.isActive, cooldown.remainingSeconds]);
+
+  const loadCooldown = async () => {
+    try {
+      const info = await rouletteService.getCooldownInfo(walletAddress);
+      setCooldown(info);
+    } catch (error) {
+      console.error("Erreur chargement cooldown:", error);
+    }
+  };
+
+  const formatCooldownTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
   const checkIfWalletIsConnected = async () => {
     try {
       if (web3Service.isMetaMaskInstalled()) {
@@ -114,6 +149,7 @@ function Roulette() {
       setWalletAddress(accounts[0]);
       loadBalance();
       loadHistory();
+      loadCooldown();
     }
   };
 
@@ -216,6 +252,11 @@ function Roulette() {
       return;
     }
 
+    if (cooldown.isActive) {
+      alert(`Cooldown actif ! Attendez encore ${formatCooldownTime(cooldown.remainingSeconds)}`);
+      return;
+    }
+
     try {
       setIsSpinning(true);
       setLoading(true);
@@ -235,6 +276,7 @@ function Roulette() {
         setHistory((prev) => [...prev.slice(-9), result.result]);
         setCurrentBet(null);
         loadBalance();
+        loadCooldown(); 
         setIsSpinning(false);
       }, 4500);
     } catch (error: any) {
@@ -245,6 +287,9 @@ function Roulette() {
         alert(ERROR_MESSAGES.USER_REJECTED);
       } else if (error.message?.includes("insufficient funds")) {
         alert(ERROR_MESSAGES.INSUFFICIENT_FUNDS);
+      } else if (error.message?.includes("Cooldown")) {
+        alert("Cooldown actif ! Veuillez patienter avant de rejouer.");
+        loadCooldown();
       } else {
         alert(ERROR_MESSAGES.UNKNOWN_ERROR + ": " + error.message);
       }
@@ -336,6 +381,24 @@ function Roulette() {
                       Pari: {getBetTypeName(currentBet.type)}
                       {currentBet.type === BetType.NUMBER &&
                         ` (${currentBet.number})`}
+                    </p>
+                  )}
+                  
+                  {cooldown.winStreak > 0 && (
+                    <p style={{ color: "#f59e0b", marginTop: "10px" }}>
+                      🔥 Série: {cooldown.winStreak} victoire{cooldown.winStreak > 1 ? "s" : ""}
+                    </p>
+                  )}
+                  {cooldown.isActive && (
+                    <p style={{ 
+                      color: "#ef4444", 
+                      fontWeight: "bold", 
+                      marginTop: "10px",
+                      padding: "8px",
+                      backgroundColor: "rgba(239, 68, 68, 0.2)",
+                      borderRadius: "5px"
+                    }}>
+                      ⏳ Cooldown: {formatCooldownTime(cooldown.remainingSeconds)}
                     </p>
                   )}
                 </div>
@@ -442,7 +505,7 @@ function Roulette() {
                   className={`simple-bet-btn red ${
                     currentBet?.type === BetType.RED ? "selected-bet" : ""
                   }`}
-                  disabled={loading}
+                  disabled={loading || cooldown.isActive}
                 >
                   ROUGE
                 </button>
@@ -451,7 +514,7 @@ function Roulette() {
                   className={`simple-bet-btn black ${
                     currentBet?.type === BetType.BLACK ? "selected-bet" : ""
                   }`}
-                  disabled={loading}
+                  disabled={loading || cooldown.isActive}
                 >
                   NOIR
                 </button>
@@ -460,7 +523,7 @@ function Roulette() {
                   className={`simple-bet-btn neutral ${
                     currentBet?.type === BetType.EVEN ? "selected-bet" : ""
                   }`}
-                  disabled={loading}
+                  disabled={loading || cooldown.isActive}
                 >
                   PAIR
                 </button>
@@ -469,7 +532,7 @@ function Roulette() {
                   className={`simple-bet-btn neutral ${
                     currentBet?.type === BetType.ODD ? "selected-bet" : ""
                   }`}
-                  disabled={loading}
+                  disabled={loading || cooldown.isActive}
                 >
                   IMPAIR
                 </button>
@@ -485,7 +548,7 @@ function Roulette() {
                         : ""
                     }`}
                     onClick={() => handleNumberClick(0)}
-                    disabled={loading}
+                    disabled={loading || cooldown.isActive}
                   >
                     0
                   </button>
@@ -503,7 +566,7 @@ function Roulette() {
                             : ""
                         }`}
                         onClick={() => handleNumberClick(num)}
-                        disabled={loading}
+                        disabled={loading || cooldown.isActive}
                       >
                         {num}
                       </button>
@@ -515,7 +578,7 @@ function Roulette() {
                           : ""
                       }`}
                       onClick={() => handleColumnBet(1)}
-                      disabled={loading}
+                      disabled={loading || cooldown.isActive}
                     >
                       2to1
                     </button>
@@ -532,7 +595,7 @@ function Roulette() {
                             : ""
                         }`}
                         onClick={() => handleNumberClick(num)}
-                        disabled={loading}
+                        disabled={loading || cooldown.isActive}
                       >
                         {num}
                       </button>
@@ -544,7 +607,7 @@ function Roulette() {
                           : ""
                       }`}
                       onClick={() => handleColumnBet(2)}
-                      disabled={loading}
+                      disabled={loading || cooldown.isActive}
                     >
                       2to1
                     </button>
@@ -561,7 +624,7 @@ function Roulette() {
                             : ""
                         }`}
                         onClick={() => handleNumberClick(num)}
-                        disabled={loading}
+                        disabled={loading || cooldown.isActive}
                       >
                         {num}
                       </button>
@@ -573,7 +636,7 @@ function Roulette() {
                           : ""
                       }`}
                       onClick={() => handleColumnBet(3)}
-                      disabled={loading}
+                      disabled={loading || cooldown.isActive}
                     >
                       2to1
                     </button>
@@ -587,7 +650,7 @@ function Roulette() {
                           : ""
                       }`}
                       onClick={() => handleDozenBet(1)}
-                      disabled={loading}
+                      disabled={loading || cooldown.isActive}
                     >
                       1st 12
                     </button>
@@ -598,7 +661,7 @@ function Roulette() {
                           : ""
                       }`}
                       onClick={() => handleDozenBet(2)}
-                      disabled={loading}
+                      disabled={loading || cooldown.isActive}
                     >
                       2nd 12
                     </button>
@@ -609,7 +672,7 @@ function Roulette() {
                           : ""
                       }`}
                       onClick={() => handleDozenBet(3)}
-                      disabled={loading}
+                      disabled={loading || cooldown.isActive}
                     >
                       3rd 12
                     </button>
@@ -626,9 +689,14 @@ function Roulette() {
                     <button
                       className="action-btn spin-btn"
                       onClick={handleSpin}
-                      disabled={loading || !currentBet}
+                      disabled={loading || !currentBet || cooldown.isActive}
+                      style={cooldown.isActive ? { opacity: 0.5, cursor: "not-allowed" } : {}}
                     >
-                      {loading ? "EN COURS..." : "LANCER"}
+                      {loading 
+                        ? "EN COURS..." 
+                        : cooldown.isActive 
+                          ? `ATTENDRE ${formatCooldownTime(cooldown.remainingSeconds)}` 
+                          : "LANCER"}
                     </button>
                   </div>
                 </div>

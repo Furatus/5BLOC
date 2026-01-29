@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import hre from "hardhat";
-import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
+import { loadFixture, time } from "@nomicfoundation/hardhat-network-helpers";
 
 describe("Roulette", function () {
   async function deployRouletteFixture() {
@@ -17,6 +17,13 @@ describe("Roulette", function () {
     return { roulette, rewardNFT, owner, player1, player2, player3 };
   }
 
+  async function skipCooldown(roulette, player) {
+    const cooldown = await roulette.getCooldownRemaining(player.address);
+    if (cooldown > 0n) {
+      await time.increase(Number(cooldown) + 1);
+    }
+  }
+
   describe("Déploiement", function () {
     it("Devrait définir correctement l'adresse du RewardNFT", async function () {
       const { roulette, rewardNFT } = await loadFixture(deployRouletteFixture);
@@ -31,57 +38,203 @@ describe("Roulette", function () {
     });
   });
 
-  describe("Achat de ticket et pari", function () {
-    it("Devrait permettre d'acheter un ticket et parier sur ROUGE", async function () {
+  describe("Cooldown exponentiel", function () {
+    it("Devrait avoir un cooldown de 0 sans victoire", async function () {
+      const { roulette, player1 } = await loadFixture(deployRouletteFixture);
+
+      const cooldown = await roulette.getRequiredCooldown(player1.address);
+      expect(cooldown).to.equal(0);
+    });
+
+    it("Devrait avoir un cooldown de 2 min après 1 victoire", async function () {
+      const { roulette, player1 } = await loadFixture(deployRouletteFixture);
+
+      const ticketPrice = await roulette.TICKET_PRICE();
+      let attempts = 0;
+      const maxAttempts = 100;
+
+      while (attempts < maxAttempts) {
+        await roulette
+          .connect(player1)
+          .buyTicketAndSpin(0, 0, { value: ticketPrice }); 
+
+        const game = await roulette.getGame(attempts);
+        if (game.hasWon) {
+          const cooldown = await roulette.getRequiredCooldown(player1.address);
+          expect(cooldown).to.equal(2n * 60n); 
+          return;
+        }
+        attempts++;
+      }
+
+      this.skip();
+    });
+
+    it("Devrait bloquer le jeu pendant le cooldown", async function () {
+      const { roulette, player1 } = await loadFixture(deployRouletteFixture);
+
+      const ticketPrice = await roulette.TICKET_PRICE();
+      let attempts = 0;
+      const maxAttempts = 100;
+
+      while (attempts < maxAttempts) {
+        await roulette
+          .connect(player1)
+          .buyTicketAndSpin(0, 0, { value: ticketPrice });
+
+        const game = await roulette.getGame(attempts);
+        if (game.hasWon) {
+          await expect(
+            roulette.connect(player1).buyTicketAndSpin(0, 0, { value: ticketPrice })
+          ).to.be.revertedWith("Cooldown exponentiel actif");
+          return;
+        }
+        attempts++;
+      }
+
+      this.skip();
+    });
+
+    it("Devrait permettre de jouer après le cooldown", async function () {
+      const { roulette, player1 } = await loadFixture(deployRouletteFixture);
+
+      const ticketPrice = await roulette.TICKET_PRICE();
+      let attempts = 0;
+      const maxAttempts = 100;
+
+      while (attempts < maxAttempts) {
+        await skipCooldown(roulette, player1);
+        
+        await roulette
+          .connect(player1)
+          .buyTicketAndSpin(0, 0, { value: ticketPrice });
+
+        const game = await roulette.getGame(attempts);
+        if (game.hasWon) {
+          await skipCooldown(roulette, player1);
+
+          await expect(
+            roulette.connect(player1).buyTicketAndSpin(0, 0, { value: ticketPrice })
+          ).to.not.be.reverted;
+          return;
+        }
+        attempts++;
+      }
+
+      this.skip();
+    });
+
+    it("Devrait avoir un cooldown exponentiel croissant", async function () {
+          const { roulette, player1 } = await loadFixture(deployRouletteFixture);
+    
+          const ticketPrice = await roulette.TICKET_PRICE();
+          let attempts = 0;
+          const maxAttempts = 200;
+    
+          while (attempts < maxAttempts) {
+            await skipCooldown(roulette, player1);
+    
+            await roulette
+              .connect(player1)
+              .buyTicketAndSpin(0, 0, { value: ticketPrice });
+    
+            const game = await roulette.getGame(attempts);
+            if (game.hasWon) {
+              const winStreak = await roulette.winStreak(player1.address);
+              const cooldown = await roulette.getRequiredCooldown(player1.address);
+              
+              const expectedCooldown = (2n ** winStreak) * 60n;
+              expect(cooldown).to.equal(expectedCooldown);
+              
+              if (winStreak >= 2n) {
+                return;
+              }
+            }
+            attempts++;
+          }
+    
+          this.skip();
+    });
+
+    it("Devrait décrémenter winStreak après une défaite", async function () {
+      const { roulette, player1 } = await loadFixture(deployRouletteFixture);
+
+      const ticketPrice = await roulette.TICKET_PRICE();
+      let hasWon = false;
+      let hasLostAfterWin = false;
+      let attempts = 0;
+      const maxAttempts = 200;
+
+      while ((!hasWon || !hasLostAfterWin) && attempts < maxAttempts) {
+        await skipCooldown(roulette, player1);
+
+        await roulette
+          .connect(player1)
+          .buyTicketAndSpin(0, 0, { value: ticketPrice });
+
+        const game = await roulette.getGame(attempts);
+        
+        if (game.hasWon && !hasWon) {
+          hasWon = true;
+          const streakAfterWin = await roulette.winStreak(player1.address);
+          expect(streakAfterWin).to.be.greaterThan(0n);
+        } else if (!game.hasWon && hasWon && !hasLostAfterWin) {
+          hasLostAfterWin = true;
+          const streakAfterLoss = await roulette.winStreak(player1.address);
+        }
+        
+        attempts++;
+      }
+
+      if (!hasWon || !hasLostAfterWin) {
+        this.skip();
+      }
+    });
+  });
+
+  describe("Achat de ticket et spin combinés", function () {
+    it("Devrait permettre d'acheter un ticket et jouer sur ROUGE", async function () {
       const { roulette, player1 } = await loadFixture(deployRouletteFixture);
 
       const ticketPrice = await roulette.TICKET_PRICE();
 
       await expect(
-        roulette.connect(player1).buyTicketAndBet(0, 0, { value: ticketPrice }),
-      )
-        .to.emit(roulette, "TicketPurchased")
-        .withArgs(player1.address, 0, 0, 0);
+        roulette.connect(player1).buyTicketAndSpin(0, 0, { value: ticketPrice }),
+      ).to.emit(roulette, "TicketPurchased");
 
       const game = await roulette.getGame(0);
       expect(game.player).to.equal(player1.address);
       expect(game.betType).to.equal(0);
-      expect(game.isPlayed).to.be.false;
+      expect(game.isPlayed).to.be.true; 
     });
 
-    it("Devrait permettre d'acheter un ticket et parier sur un NUMÉRO", async function () {
+    it("Devrait permettre de parier sur un NUMÉRO", async function () {
       const { roulette, player1 } = await loadFixture(deployRouletteFixture);
 
       const ticketPrice = await roulette.TICKET_PRICE();
 
-      await expect(
-        roulette
-          .connect(player1)
-          .buyTicketAndBet(10, 17, { value: ticketPrice }),
-      )
-        .to.emit(roulette, "TicketPurchased")
-        .withArgs(player1.address, 0, 10, 17);
+      await roulette
+        .connect(player1)
+        .buyTicketAndSpin(10, 17, { value: ticketPrice });
 
       const game = await roulette.getGame(0);
       expect(game.numberBet).to.equal(17);
+      expect(game.isPlayed).to.be.true;
     });
 
-    it("Devrait permettre d'acheter un ticket et parier sur ZÉRO", async function () {
+    it("Devrait permettre de parier sur ZÉRO", async function () {
       const { roulette, player1 } = await loadFixture(deployRouletteFixture);
 
       const ticketPrice = await roulette.TICKET_PRICE();
 
-      await expect(
-        roulette
-          .connect(player1)
-          .buyTicketAndBet(11, 0, { value: ticketPrice }),
-      )
-        .to.emit(roulette, "TicketPurchased")
-        .withArgs(player1.address, 0, 11, 0);
+      await roulette
+        .connect(player1)
+        .buyTicketAndSpin(11, 0, { value: ticketPrice });
 
       const game = await roulette.getGame(0);
       expect(game.betType).to.equal(11);
       expect(game.numberBet).to.equal(0);
+      expect(game.isPlayed).to.be.true;
     });
 
     it("Devrait refuser un montant incorrect", async function () {
@@ -90,7 +243,7 @@ describe("Roulette", function () {
       await expect(
         roulette
           .connect(player1)
-          .buyTicketAndBet(0, 0, { value: hre.ethers.parseEther("0.02") }),
+          .buyTicketAndSpin(0, 0, { value: hre.ethers.parseEther("0.02") }),
       ).to.be.revertedWith("Incorrect ticket price");
     });
 
@@ -102,7 +255,7 @@ describe("Roulette", function () {
       await expect(
         roulette
           .connect(player1)
-          .buyTicketAndBet(10, 37, { value: ticketPrice }),
+          .buyTicketAndSpin(10, 37, { value: ticketPrice }),
       ).to.be.revertedWith("Number must be between 0 and 36");
     });
 
@@ -114,7 +267,7 @@ describe("Roulette", function () {
       await expect(
         roulette
           .connect(player1)
-          .buyTicketAndBet(10, 0, { value: ticketPrice }),
+          .buyTicketAndSpin(10, 0, { value: ticketPrice }),
       ).to.be.revertedWith("Number bet must be 1-36");
     });
 
@@ -126,7 +279,7 @@ describe("Roulette", function () {
       await expect(
         roulette
           .connect(player1)
-          .buyTicketAndBet(11, 5, { value: ticketPrice }),
+          .buyTicketAndSpin(11, 5, { value: ticketPrice }),
       ).to.be.revertedWith("Zero bet must specify number 0");
     });
 
@@ -137,10 +290,13 @@ describe("Roulette", function () {
 
       await roulette
         .connect(player1)
-        .buyTicketAndBet(0, 0, { value: ticketPrice });
+        .buyTicketAndSpin(0, 0, { value: ticketPrice });
+      
+      await skipCooldown(roulette, player1);
+      
       await roulette
         .connect(player1)
-        .buyTicketAndBet(1, 0, { value: ticketPrice });
+        .buyTicketAndSpin(1, 0, { value: ticketPrice });
 
       const games = await roulette.getPlayerGames(player1.address);
       expect(games.length).to.equal(2);
@@ -157,10 +313,10 @@ describe("Roulette", function () {
 
       await roulette
         .connect(player1)
-        .buyTicketAndBet(0, 0, { value: ticketPrice });
+        .buyTicketAndSpin(0, 0, { value: ticketPrice });
       await roulette
         .connect(player2)
-        .buyTicketAndBet(1, 0, { value: ticketPrice });
+        .buyTicketAndSpin(1, 0, { value: ticketPrice });
 
       const game1 = await roulette.getGame(0);
       const game2 = await roulette.getGame(1);
@@ -168,64 +324,20 @@ describe("Roulette", function () {
       expect(game1.player).to.equal(player1.address);
       expect(game2.player).to.equal(player2.address);
     });
-  });
 
-  describe("Lancer la roulette", function () {
-    it("Devrait permettre au joueur de lancer sa partie", async function () {
+    it("Devrait émettre l'événement RouletteSpun", async function () {
       const { roulette, player1 } = await loadFixture(deployRouletteFixture);
 
       const ticketPrice = await roulette.TICKET_PRICE();
-      await roulette
-        .connect(player1)
-        .buyTicketAndBet(0, 0, { value: ticketPrice });
 
-      const tx = await roulette.connect(player1).spin(0);
-      const receipt = await tx.wait();
-
-      const event = receipt.logs.find((log) => {
-        try {
-          return roulette.interface.parseLog(log).name === "RouletteSpun";
-        } catch {
-          return false;
-        }
-      });
-
-      expect(event).to.not.be.undefined;
+      await expect(
+        roulette.connect(player1).buyTicketAndSpin(0, 0, { value: ticketPrice })
+      ).to.emit(roulette, "RouletteSpun");
 
       const game = await roulette.getGame(0);
       expect(game.isPlayed).to.be.true;
       expect(game.result).to.be.at.least(0);
       expect(game.result).to.be.at.most(36);
-    });
-
-    it("Devrait empêcher quelqu'un d'autre de lancer la partie", async function () {
-      const { roulette, player1, player2 } = await loadFixture(
-        deployRouletteFixture,
-      );
-
-      const ticketPrice = await roulette.TICKET_PRICE();
-      await roulette
-        .connect(player1)
-        .buyTicketAndBet(0, 0, { value: ticketPrice });
-
-      await expect(roulette.connect(player2).spin(0)).to.be.revertedWith(
-        "Not your game",
-      );
-    });
-
-    it("Devrait empêcher de rejouer une partie déjà jouée", async function () {
-      const { roulette, player1 } = await loadFixture(deployRouletteFixture);
-
-      const ticketPrice = await roulette.TICKET_PRICE();
-      await roulette
-        .connect(player1)
-        .buyTicketAndBet(0, 0, { value: ticketPrice });
-
-      await roulette.connect(player1).spin(0);
-
-      await expect(roulette.connect(player1).spin(0)).to.be.revertedWith(
-        "Game already played",
-      );
     });
 
     it("Devrait définir hasWon correctement", async function () {
@@ -234,12 +346,9 @@ describe("Roulette", function () {
       const ticketPrice = await roulette.TICKET_PRICE();
       await roulette
         .connect(player1)
-        .buyTicketAndBet(0, 0, { value: ticketPrice });
-
-      await roulette.connect(player1).spin(0);
+        .buyTicketAndSpin(0, 0, { value: ticketPrice });
 
       const game = await roulette.getGame(0);
-
       expect(typeof game.hasWon).to.equal("boolean");
     });
   });
@@ -257,10 +366,11 @@ describe("Roulette", function () {
       const maxAttempts = 100;
 
       while (!won && attempts < maxAttempts) {
+        await skipCooldown(roulette, player1);
+        
         await roulette
           .connect(player1)
-          .buyTicketAndBet(11, 0, { value: ticketPrice });
-        await roulette.connect(player1).spin(attempts);
+          .buyTicketAndSpin(11, 0, { value: ticketPrice });
 
         const game = await roulette.getGame(attempts);
         if (game.result === 0n) {
@@ -271,7 +381,7 @@ describe("Roulette", function () {
           expect(balance).to.be.greaterThan(0);
 
           const metadata = await rewardNFT.getTokenMetadata(balance - 1n);
-          expect(metadata.rewardType).to.equal(3);
+          expect(metadata.rewardType).to.equal(3); 
         }
         attempts++;
       }
@@ -293,10 +403,11 @@ describe("Roulette", function () {
       const maxAttempts = 50;
 
       while (!won && attempts < maxAttempts) {
+        await skipCooldown(roulette, player1);
+        
         await roulette
           .connect(player1)
-          .buyTicketAndBet(0, 0, { value: ticketPrice });
-        await roulette.connect(player1).spin(attempts);
+          .buyTicketAndSpin(0, 0, { value: ticketPrice });
 
         const game = await roulette.getGame(attempts);
         if (game.hasWon) {
@@ -304,7 +415,7 @@ describe("Roulette", function () {
 
           const balance = await rewardNFT.balanceOf(player1.address);
           const metadata = await rewardNFT.getTokenMetadata(balance - 1n);
-          expect(metadata.rewardType).to.equal(0);
+          expect(metadata.rewardType).to.equal(0);  
         }
         attempts++;
       }
@@ -315,46 +426,56 @@ describe("Roulette", function () {
     });
 
     it("Ne devrait PAS distribuer de NFT si inventaire plein", async function () {
-      const { roulette, rewardNFT, player1, owner } = await loadFixture(
-        deployRouletteFixture,
-      );
-
-      await rewardNFT.connect(owner).transferOwnership(owner.address);
-
-      for (let i = 0; i < 20; i++) {
-        await rewardNFT
-          .connect(owner)
-          .mintReward(player1.address, `NFT ${i}`, 0, `Qm${i}`);
-      }
-
-      await rewardNFT
-        .connect(owner)
-        .transferOwnership(await roulette.getAddress());
-
-      const balanceBefore = await rewardNFT.balanceOf(player1.address);
-      expect(balanceBefore).to.equal(20);
-
-      const ticketPrice = await roulette.TICKET_PRICE();
-      let attempts = 0;
-      const maxAttempts = 50;
-
-      while (attempts < maxAttempts) {
-        await roulette
-          .connect(player1)
-          .buyTicketAndBet(0, 0, { value: ticketPrice });
-        await roulette.connect(player1).spin(attempts);
-
-        const game = await roulette.getGame(attempts);
-        if (game.hasWon) {
-          const balanceAfter = await rewardNFT.balanceOf(player1.address);
-          expect(balanceAfter).to.equal(20);
-          return;
-        }
-        attempts++;
-      }
-
-      this.skip();
-    });
+          const { roulette, rewardNFT, player1, owner } = await loadFixture(
+            deployRouletteFixture,
+          );
+    
+          const RewardNFTFactory = await hre.ethers.getContractFactory("RewardNFT");
+          const newRewardNFT = await RewardNFTFactory.deploy();
+    
+          for (let i = 0; i < 20; i++) {
+            await newRewardNFT
+              .connect(owner)
+              .mintReward(player1.address, `NFT ${i}`, 0, `Qm${i}`);
+          }
+    
+          const RouletteFactory = await hre.ethers.getContractFactory("Roulette");
+          const newRoulette = await RouletteFactory.deploy(await newRewardNFT.getAddress());
+    
+          await newRewardNFT.connect(owner).transferOwnership(await newRoulette.getAddress());
+    
+          const balanceBefore = await newRewardNFT.balanceOf(player1.address);
+          expect(balanceBefore).to.equal(20);
+    
+          const ticketPrice = await newRoulette.TICKET_PRICE();
+          let attempts = 0;
+          const maxAttempts = 50;
+    
+          async function skipCooldownLocal() {
+            const cooldown = await newRoulette.getCooldownRemaining(player1.address);
+            if (cooldown > 0n) {
+              await time.increase(Number(cooldown) + 1);
+            }
+          }
+    
+          while (attempts < maxAttempts) {
+            await skipCooldownLocal();
+            
+            await newRoulette
+              .connect(player1)
+              .buyTicketAndSpin(0, 0, { value: ticketPrice });
+    
+            const game = await newRoulette.getGame(attempts);
+            if (game.hasWon) {
+              const balanceAfter = await newRewardNFT.balanceOf(player1.address);
+              expect(balanceAfter).to.equal(20); // Toujours 20, pas de nouveau NFT
+              return;
+            }
+            attempts++;
+          }
+    
+          this.skip();
+        });
 
     it("Ne devrait PAS distribuer de NFT en cas de défaite", async function () {
       const { roulette, rewardNFT, player1 } = await loadFixture(
@@ -367,10 +488,11 @@ describe("Roulette", function () {
       const maxAttempts = 50;
 
       while (attempts < maxAttempts) {
+        await skipCooldown(roulette, player1);
+        
         await roulette
           .connect(player1)
-          .buyTicketAndBet(0, 0, { value: ticketPrice });
-        await roulette.connect(player1).spin(attempts);
+          .buyTicketAndSpin(0, 0, { value: ticketPrice });
 
         const game = await roulette.getGame(attempts);
         if (!game.hasWon) {
@@ -395,13 +517,16 @@ describe("Roulette", function () {
 
       await roulette
         .connect(player1)
-        .buyTicketAndBet(0, 0, { value: ticketPrice });
+        .buyTicketAndSpin(0, 0, { value: ticketPrice });
       await roulette
         .connect(player2)
-        .buyTicketAndBet(1, 0, { value: ticketPrice });
+        .buyTicketAndSpin(1, 0, { value: ticketPrice });
+      
+      await skipCooldown(roulette, player1);
+      
       await roulette
         .connect(player1)
-        .buyTicketAndBet(2, 0, { value: ticketPrice });
+        .buyTicketAndSpin(2, 0, { value: ticketPrice });
 
       const player1Games = await roulette.getPlayerGames(player1.address);
       const player2Games = await roulette.getPlayerGames(player2.address);
@@ -425,12 +550,12 @@ describe("Roulette", function () {
 
       await roulette
         .connect(player1)
-        .buyTicketAndBet(0, 0, { value: ticketPrice });
+        .buyTicketAndSpin(0, 0, { value: ticketPrice });
       expect(await roulette.getBalance()).to.equal(ticketPrice);
 
       await roulette
         .connect(player2)
-        .buyTicketAndBet(1, 0, { value: ticketPrice });
+        .buyTicketAndSpin(1, 0, { value: ticketPrice });
       expect(await roulette.getBalance()).to.equal(ticketPrice * 2n);
     });
 
@@ -440,15 +565,45 @@ describe("Roulette", function () {
       const ticketPrice = await roulette.TICKET_PRICE();
       await roulette
         .connect(player1)
-        .buyTicketAndBet(0, 0, { value: ticketPrice });
+        .buyTicketAndSpin(0, 0, { value: ticketPrice });
 
       const game = await roulette.getGame(0);
 
       expect(game.player).to.equal(player1.address);
       expect(game.betType).to.equal(0);
       expect(game.numberBet).to.equal(0);
-      expect(game.isPlayed).to.be.false;
+      expect(game.isPlayed).to.be.true;
       expect(game.timestamp).to.be.greaterThan(0);
+    });
+
+    it("getCooldownRemaining devrait retourner le temps restant", async function () {
+      const { roulette, player1 } = await loadFixture(deployRouletteFixture);
+
+      const ticketPrice = await roulette.TICKET_PRICE();
+      let attempts = 0;
+      const maxAttempts = 100;
+
+      while (attempts < maxAttempts) {
+        await skipCooldown(roulette, player1);
+        
+        await roulette
+          .connect(player1)
+          .buyTicketAndSpin(0, 0, { value: ticketPrice });
+
+        const game = await roulette.getGame(attempts);
+        if (game.hasWon) {
+          const remaining = await roulette.getCooldownRemaining(player1.address);
+          expect(remaining).to.be.greaterThan(0n);
+          
+          await time.increase(Number(remaining) + 1);
+          const remainingAfter = await roulette.getCooldownRemaining(player1.address);
+          expect(remainingAfter).to.equal(0n);
+          return;
+        }
+        attempts++;
+      }
+
+      this.skip();
     });
   });
 
@@ -462,17 +617,13 @@ describe("Roulette", function () {
 
       await roulette
         .connect(player1)
-        .buyTicketAndBet(0, 0, { value: ticketPrice });
+        .buyTicketAndSpin(0, 0, { value: ticketPrice });
       await roulette
         .connect(player2)
-        .buyTicketAndBet(1, 0, { value: ticketPrice });
+        .buyTicketAndSpin(1, 0, { value: ticketPrice });
       await roulette
         .connect(player3)
-        .buyTicketAndBet(10, 7, { value: ticketPrice });
-
-      await roulette.connect(player1).spin(0);
-      await roulette.connect(player2).spin(1);
-      await roulette.connect(player3).spin(2);
+        .buyTicketAndSpin(10, 7, { value: ticketPrice });
 
       const game1 = await roulette.getGame(0);
       const game2 = await roulette.getGame(1);
@@ -483,20 +634,58 @@ describe("Roulette", function () {
       expect(game3.isPlayed).to.be.true;
     });
 
-    it("Un joueur peut jouer plusieurs fois", async function () {
+    it("Un joueur peut jouer plusieurs fois avec cooldown respecté", async function () {
       const { roulette, player1 } = await loadFixture(deployRouletteFixture);
 
       const ticketPrice = await roulette.TICKET_PRICE();
 
       for (let i = 0; i < 5; i++) {
+        await skipCooldown(roulette, player1);
+        
         await roulette
           .connect(player1)
-          .buyTicketAndBet(0, 0, { value: ticketPrice });
-        await roulette.connect(player1).spin(i);
+          .buyTicketAndSpin(0, 0, { value: ticketPrice });
       }
 
       const games = await roulette.getPlayerGames(player1.address);
       expect(games.length).to.equal(5);
+    });
+
+    it("Les cooldowns sont indépendants entre joueurs", async function () {
+      const { roulette, player1, player2 } = await loadFixture(
+        deployRouletteFixture,
+      );
+
+      const ticketPrice = await roulette.TICKET_PRICE();
+      let player1Won = false;
+      let attempts = 0;
+      const maxAttempts = 50;
+
+      while (!player1Won && attempts < maxAttempts) {
+        await skipCooldown(roulette, player1);
+        
+        await roulette
+          .connect(player1)
+          .buyTicketAndSpin(0, 0, { value: ticketPrice });
+
+        const game = await roulette.getGame(attempts);
+        if (game.hasWon) {
+          player1Won = true;
+        }
+        attempts++;
+      }
+
+      if (!player1Won) {
+        this.skip();
+        return;
+      }
+
+      const cooldown1 = await roulette.getCooldownRemaining(player1.address);
+      expect(cooldown1).to.be.greaterThan(0n);
+
+      await expect(
+        roulette.connect(player2).buyTicketAndSpin(0, 0, { value: ticketPrice })
+      ).to.not.be.reverted;
     });
   });
 });

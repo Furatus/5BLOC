@@ -14,6 +14,12 @@ export interface GameResult {
   txHash?: string;
 }
 
+export interface CooldownInfo {
+  isActive: boolean;
+  remainingSeconds: number;
+  winStreak: number;
+}
+
 class RouletteService {
   private getContract(): Contract {
     const provider = web3Service.getProvider();
@@ -39,6 +45,28 @@ class RouletteService {
     return ethers.formatEther(price);
   }
 
+  async getCooldownInfo(playerAddress: string): Promise<CooldownInfo> {
+    const contract = this.getContract();
+    
+    try {
+      const remainingSeconds = await contract.getCooldownRemaining(playerAddress);
+      const winStreak = await contract.winStreak(playerAddress);
+      
+      return {
+        isActive: Number(remainingSeconds) > 0,
+        remainingSeconds: Number(remainingSeconds),
+        winStreak: Number(winStreak),
+      };
+    } catch (error) {
+      console.error("Erreur getCooldownInfo:", error);
+      return {
+        isActive: false,
+        remainingSeconds: 0,
+        winStreak: 0,
+      };
+    }
+  }
+
   async buyTicketAndSpin(
     betType: number,
     numberBet: number,
@@ -46,16 +74,12 @@ class RouletteService {
     const contract = await this.getContractWithSigner();
     const ticketPrice = await contract.TICKET_PRICE();
 
-   
-
     const tx = await contract.buyTicketAndSpin(betType, numberBet, {
       value: ticketPrice,
       gasLimit: 400000,
     });
 
-
     const receipt = await tx.wait();
-
 
     let gameId = 0;
     for (const log of receipt.logs || []) {

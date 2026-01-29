@@ -13,6 +13,11 @@ export interface TradeOffer {
   createdAt: number;
 }
 
+export interface TradeCooldownInfo {
+  isActive: boolean;
+  remainingSeconds: number;
+}
+
 class TradeService {
   private getContract(): Contract {
     const provider = web3Service.getProvider();
@@ -36,16 +41,31 @@ class TradeService {
     return new ethers.Contract(CONTRACT_ADDRESSES.Trade, abi, signer);
   }
 
+  async getCooldownInfo(userAddress: string): Promise<TradeCooldownInfo> {
+    const contract = this.getContract();
+    
+    try {
+      const remainingSeconds = await contract.getCooldownRemaining(userAddress);
+      
+      return {
+        isActive: Number(remainingSeconds) > 0,
+        remainingSeconds: Number(remainingSeconds),
+      };
+    } catch (error) {
+      console.error("Erreur getCooldownInfo Trade:", error);
+      return {
+        isActive: false,
+        remainingSeconds: 0,
+      };
+    }
+  }
+
   async createOffer(
     creatorNFT: number,
     requestedNFT: number,
     targetOwner?: string,
   ): Promise<number> {
     const contract = await this.getContractWithSigner();
-
-    
-    
-    
 
     let ownerAddress = targetOwner;
     if (!ownerAddress) {
@@ -55,7 +75,6 @@ class TradeService {
         web3Service.getProvider(),
       );
       ownerAddress = await nftContract.ownerOf(requestedNFT);
-      
     }
 
     const tx = await contract.proposeSwap(
@@ -65,7 +84,6 @@ class TradeService {
     );
 
     const receipt = await tx.wait();
-    
 
     const event = receipt.logs?.find((log: any) => {
       try {
@@ -87,12 +105,8 @@ class TradeService {
   async acceptOffer(offerId: number): Promise<string> {
     const contract = await this.getContractWithSigner();
 
-    
-
     const tx = await contract.acceptSwap(offerId);
-
     const receipt = await tx.wait();
-    
 
     return receipt.hash;
   }
@@ -100,12 +114,8 @@ class TradeService {
   async cancelOffer(offerId: number): Promise<string> {
     const contract = await this.getContractWithSigner();
 
-    
-
     const tx = await contract.cancelSwap(offerId);
-
     const receipt = await tx.wait();
-    
 
     return receipt.hash;
   }
@@ -114,8 +124,6 @@ class TradeService {
     try {
       const contract = this.getContract();
       const swap = await contract.getSwap(offerId);
-
-      
 
       if (swap.proposer === ethers.ZeroAddress) {
         return null;
@@ -131,8 +139,6 @@ class TradeService {
         createdAt: Number(swap.createdAt),
       };
 
-      
-
       return offer;
     } catch (error) {
       console.error("Erreur getOffer:", error);
@@ -140,21 +146,16 @@ class TradeService {
     }
   }
 
-
   async getActiveOffers(): Promise<TradeOffer[]> {
     const contract = this.getContract();
 
     try {
-      
-
       const filterCreated = contract.filters.SwapProposed();
       const eventsCreated = await contract.queryFilter(
         filterCreated,
         0,
         "latest",
       );
-
-      
 
       const offers: TradeOffer[] = [];
 
@@ -166,15 +167,11 @@ class TradeService {
           });
 
           if (parsed) {
-            
             const offerId = Number(parsed.args.swapId);
             const offer = await this.getOffer(offerId);
 
             if (offer && offer.isActive) {
-              
               offers.push(offer);
-            } else {
-              
             }
           }
         } catch (error) {
@@ -182,7 +179,6 @@ class TradeService {
         }
       }
 
-      
       return offers;
     } catch (error) {
       console.error("Erreur getActiveOffers:", error);
@@ -194,23 +190,17 @@ class TradeService {
     const contract = this.getContract();
 
     try {
-      
-
       const swapIds = await contract.getProposerSwaps(userAddress);
-      
-
       const offers: TradeOffer[] = [];
 
       for (const swapId of swapIds) {
         const offer = await this.getOffer(Number(swapId));
 
         if (offer) {
-          
           offers.push(offer);
         }
       }
 
-      
       return offers;
     } catch (error) {
       console.error("Erreur getUserOffers:", error);

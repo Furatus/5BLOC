@@ -34,6 +34,10 @@ contract Trade {
 
     mapping(uint256 => uint256) public activeSwapForToken;
 
+    mapping(address => uint256) public lastActionTimestamp;
+
+    uint256 public constant TRADE_COOLDOWN = 5 minutes;
+
     event SwapProposed(
         uint256 indexed swapId,
         address indexed proposer,
@@ -54,6 +58,15 @@ contract Trade {
 
     event SwapRejected(uint256 indexed swapId, address indexed target);
 
+    modifier withCooldown() {
+        require(
+            block.timestamp >= lastActionTimestamp[msg.sender] + TRADE_COOLDOWN,
+            "Cooldown: Veuillez patienter 5 minutes"
+        );
+        _;
+        lastActionTimestamp[msg.sender] = block.timestamp;
+    }
+
     constructor(address _rewardNFTAddress) {
         rewardNFT = RewardNFT(_rewardNFTAddress);
     }
@@ -62,7 +75,7 @@ contract Trade {
         uint256 myTokenId,
         uint256 targetTokenId,
         address targetOwner
-    ) external returns (uint256) {
+    ) external withCooldown returns (uint256) {
         require(targetOwner != address(0), "Invalid target address");
         require(targetOwner != msg.sender, "Cannot swap with yourself");
         require(
@@ -117,7 +130,7 @@ contract Trade {
         return swapId;
     }
 
-    function acceptSwap(uint256 swapId) external {
+    function acceptSwap(uint256 swapId) external withCooldown {
         SwapProposal storage swap = swaps[swapId];
 
         require(swap.swapId != 0, "Swap does not exist");
@@ -155,7 +168,7 @@ contract Trade {
         );
     }
 
-    function cancelSwap(uint256 swapId) external {
+    function cancelSwap(uint256 swapId) external withCooldown {
         SwapProposal storage swap = swaps[swapId];
 
         require(swap.swapId != 0, "Swap does not exist");
@@ -171,7 +184,7 @@ contract Trade {
         emit SwapCancelled(swapId, msg.sender);
     }
 
-    function rejectSwap(uint256 swapId) external {
+    function rejectSwap(uint256 swapId) external withCooldown {
         SwapProposal storage swap = swaps[swapId];
 
         require(swap.swapId != 0, "Swap does not exist");
@@ -233,5 +246,13 @@ contract Trade {
 
     function isTokenInActiveSwap(uint256 tokenId) external view returns (bool) {
         return activeSwapForToken[tokenId] != 0;
+    }
+
+    function getCooldownRemaining(address user) external view returns (uint256) {
+        uint256 nextActionTime = lastActionTimestamp[user] + TRADE_COOLDOWN;
+        if (block.timestamp >= nextActionTime) {
+            return 0;
+        }
+        return nextActionTime - block.timestamp;
     }
 }

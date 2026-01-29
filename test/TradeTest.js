@@ -1,8 +1,10 @@
 import { expect } from "chai";
 import hre from "hardhat";
-import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
+import { loadFixture, time } from "@nomicfoundation/hardhat-network-helpers";
 
 describe("Trade", function () {
+  const TRADE_COOLDOWN = 5 * 60;
+
   async function deployTradeFixture() {
     const [owner, alice, bob, charlie] = await hre.ethers.getSigners();
 
@@ -28,10 +30,76 @@ describe("Trade", function () {
     return { trade, rewardNFT, owner, alice, bob, charlie };
   }
 
+  async function skipCooldown() {
+    await time.increase(TRADE_COOLDOWN + 1);
+  }
+
   describe("Déploiement", function () {
     it("Devrait définir correctement l'adresse du RewardNFT", async function () {
       const { trade, rewardNFT } = await loadFixture(deployTradeFixture);
       expect(await trade.rewardNFT()).to.equal(await rewardNFT.getAddress());
+    });
+
+    it("Devrait avoir le bon cooldown défini", async function () {
+      const { trade } = await loadFixture(deployTradeFixture);
+      expect(await trade.TRADE_COOLDOWN()).to.equal(TRADE_COOLDOWN);
+    });
+  });
+
+  describe("Cooldown de trading", function () {
+    it("Devrait bloquer une deuxième action pendant le cooldown", async function () {
+      const { trade, alice, bob, charlie } = await loadFixture(deployTradeFixture);
+
+      await trade.connect(alice).proposeSwap(0, 2, bob.address);
+
+      await expect(
+        trade.connect(alice).proposeSwap(1, 4, charlie.address)
+      ).to.be.revertedWith("Cooldown: Veuillez patienter 5 minutes");
+    });
+
+    it("Devrait permettre une action après le cooldown", async function () {
+      const { trade, alice, bob, charlie } = await loadFixture(deployTradeFixture);
+
+      await trade.connect(alice).proposeSwap(0, 2, bob.address);
+
+      await skipCooldown();
+
+      await expect(
+        trade.connect(alice).proposeSwap(1, 4, charlie.address)
+      ).to.not.be.reverted;
+    });
+
+    it("getCooldownRemaining devrait retourner le temps restant", async function () {
+      const { trade, alice, bob } = await loadFixture(deployTradeFixture);
+
+      const remainingBefore = await trade.getCooldownRemaining(alice.address);
+      expect(remainingBefore).to.equal(0n);
+
+      await trade.connect(alice).proposeSwap(0, 2, bob.address);
+
+      const remainingAfter = await trade.getCooldownRemaining(alice.address);
+      expect(remainingAfter).to.be.greaterThan(0n);
+      expect(remainingAfter).to.be.at.most(BigInt(TRADE_COOLDOWN));
+
+      await skipCooldown();
+      const remainingFinal = await trade.getCooldownRemaining(alice.address);
+      expect(remainingFinal).to.equal(0n);
+    });
+
+    it("Les cooldowns sont indépendants entre utilisateurs", async function () {
+      const { trade, alice, bob, charlie } = await loadFixture(deployTradeFixture);
+
+      await trade.connect(alice).proposeSwap(0, 2, bob.address);
+
+      const aliceCooldown = await trade.getCooldownRemaining(alice.address);
+      expect(aliceCooldown).to.be.greaterThan(0n);
+
+      const bobCooldown = await trade.getCooldownRemaining(bob.address);
+      expect(bobCooldown).to.equal(0n);
+
+      await expect(
+        trade.connect(bob).proposeSwap(3, 4, charlie.address)
+      ).to.not.be.reverted;
     });
   });
 
@@ -83,6 +151,8 @@ describe("Trade", function () {
       );
 
       await trade.connect(alice).proposeSwap(0, 2, bob.address);
+
+      await skipCooldown();
 
       await expect(
         trade.connect(alice).proposeSwap(0, 4, charlie.address),
@@ -162,6 +232,8 @@ describe("Trade", function () {
       await trade.connect(alice).proposeSwap(0, 2, bob.address);
       await trade.connect(bob).acceptSwap(1);
 
+      await skipCooldown();
+
       await expect(trade.connect(bob).acceptSwap(1)).to.be.revertedWith(
         "Swap is not pending",
       );
@@ -212,6 +284,32 @@ describe("Trade", function () {
       expect(await trade.isTokenInActiveSwap(0)).to.be.false;
       expect(await trade.isTokenInActiveSwap(2)).to.be.false;
     });
+
+    it("Devrait respecter le cooldown pour acceptSwap", async function () {
+      const { trade, rewardNFT, alice, bob, charlie } = await loadFixture(
+        deployTradeFixture,
+      );
+
+      await rewardNFT
+        .connect(alice)
+        .setApprovalForAll(await trade.getAddress(), true);
+      await rewardNFT
+        .connect(bob)
+        .setApprovalForAll(await trade.getAddress(), true);
+
+      await trade.connect(alice).proposeSwap(0, 2, bob.address);
+      await skipCooldown();
+      await trade.connect(alice).proposeSwap(1, 3, bob.address);
+
+      await trade.connect(bob).acceptSwap(1);
+
+      await expect(
+        trade.connect(bob).acceptSwap(2)
+      ).to.be.revertedWith("Cooldown: Veuillez patienter 5 minutes");
+
+      await skipCooldown();
+      await expect(trade.connect(bob).acceptSwap(2)).to.not.be.reverted;
+    });
   });
 
   describe("Annulation d'échange", function () {
@@ -219,6 +317,8 @@ describe("Trade", function () {
       const { trade, alice, bob } = await loadFixture(deployTradeFixture);
 
       await trade.connect(alice).proposeSwap(0, 2, bob.address);
+
+      await skipCooldown();
 
       await expect(trade.connect(alice).cancelSwap(1))
         .to.emit(trade, "SwapCancelled")
@@ -245,10 +345,24 @@ describe("Trade", function () {
 
       expect(await trade.isTokenInActiveSwap(0)).to.be.true;
 
+      await skipCooldown();
       await trade.connect(alice).cancelSwap(1);
 
       expect(await trade.isTokenInActiveSwap(0)).to.be.false;
       expect(await trade.isTokenInActiveSwap(2)).to.be.false;
+    });
+
+    it("Devrait respecter le cooldown pour cancelSwap", async function () {
+      const { trade, alice, bob } = await loadFixture(deployTradeFixture);
+
+      await trade.connect(alice).proposeSwap(0, 2, bob.address);
+
+      await expect(
+        trade.connect(alice).cancelSwap(1)
+      ).to.be.revertedWith("Cooldown: Veuillez patienter 5 minutes");
+
+      await skipCooldown();
+      await expect(trade.connect(alice).cancelSwap(1)).to.not.be.reverted;
     });
   });
 
@@ -287,6 +401,25 @@ describe("Trade", function () {
       expect(await trade.isTokenInActiveSwap(0)).to.be.false;
       expect(await trade.isTokenInActiveSwap(2)).to.be.false;
     });
+
+    it("Devrait respecter le cooldown pour rejectSwap", async function () {
+      const { trade, rewardNFT, alice, bob, charlie } = await loadFixture(
+        deployTradeFixture,
+      );
+
+      await trade.connect(alice).proposeSwap(0, 2, bob.address);
+      
+      await trade.connect(charlie).proposeSwap(4, 3, bob.address);
+
+      await trade.connect(bob).rejectSwap(1);
+
+      await expect(
+        trade.connect(bob).rejectSwap(2)
+      ).to.be.revertedWith("Cooldown: Veuillez patienter 5 minutes");
+
+      await skipCooldown();
+      await expect(trade.connect(bob).rejectSwap(2)).to.not.be.reverted;
+    });
   });
 
   describe("Fonctions de lecture", function () {
@@ -296,6 +429,9 @@ describe("Trade", function () {
       );
 
       await trade.connect(alice).proposeSwap(0, 2, bob.address);
+      
+      await skipCooldown();
+      
       await trade.connect(alice).proposeSwap(1, 3, bob.address);
 
       let pending = await trade.getPendingSwapsForUser(bob.address);
@@ -339,6 +475,8 @@ describe("Trade", function () {
       await trade.connect(alice).proposeSwap(0, 2, bob.address);
       await trade.connect(bob).acceptSwap(1);
 
+      await skipCooldown();
+      
       await trade.connect(bob).proposeSwap(0, 4, charlie.address);
 
       const swap = await trade.getSwap(2);
@@ -361,5 +499,48 @@ describe("Trade", function () {
       expect(swap1.proposer).to.equal(alice.address);
       expect(swap2.proposer).to.equal(bob.address);
     });
+
+    it("Workflow complet avec cooldowns", async function () {
+          const { trade, rewardNFT, alice, bob } = await loadFixture(
+            deployTradeFixture,
+          );
+    
+          await rewardNFT
+            .connect(alice)
+            .setApprovalForAll(await trade.getAddress(), true);
+          await rewardNFT
+            .connect(bob)
+            .setApprovalForAll(await trade.getAddress(), true);
+    
+          await trade.connect(alice).proposeSwap(0, 2, bob.address);
+          
+          await trade.connect(bob).acceptSwap(1);
+    
+          expect(await rewardNFT.ownerOf(0)).to.equal(bob.address);
+          expect(await rewardNFT.ownerOf(2)).to.equal(alice.address);
+    
+          await expect(
+            trade.connect(alice).proposeSwap(2, 3, bob.address)
+          ).to.be.revertedWith("Cooldown: Veuillez patienter 5 minutes");
+    
+          await skipCooldown();
+          
+          await trade.connect(alice).proposeSwap(2, 3, bob.address);
+
+          const bobCooldown = await trade.getCooldownRemaining(bob.address);
+          
+          if (bobCooldown > 0n) {
+            await expect(
+              trade.connect(bob).acceptSwap(2)
+            ).to.be.revertedWith("Cooldown: Veuillez patienter 5 minutes");
+            
+            await skipCooldown();
+          }
+          
+          await expect(trade.connect(bob).acceptSwap(2)).to.not.be.reverted;
+          
+          expect(await rewardNFT.ownerOf(2)).to.equal(bob.address);
+          expect(await rewardNFT.ownerOf(3)).to.equal(alice.address);
+        });
   });
 });

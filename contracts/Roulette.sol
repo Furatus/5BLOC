@@ -6,41 +6,9 @@ import "./RewardNFT.sol";
 contract Roulette {
     uint256 public constant TICKET_PRICE = 0.01 ether;
 
-    uint8[] private RED_NUMBERS = [
-        1,
-        3,
-        5,
-        7,
-        9,
-        12,
-        14,
-        16,
-        18,
-        19,
-        21,
-        23,
-        25,
-        27,
-        30,
-        32,
-        34,
-        36
-    ];
+    uint8[] private RED_NUMBERS = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
 
-    enum BetType {
-        RED,
-        BLACK,
-        EVEN,
-        ODD,
-        DOZEN_1,
-        DOZEN_2,
-        DOZEN_3,
-        COLUMN_1,
-        COLUMN_2,
-        COLUMN_3,
-        NUMBER,
-        ZERO
-    }
+    enum BetType { RED, BLACK, EVEN, ODD, DOZEN_1, DOZEN_2, DOZEN_3, COLUMN_1, COLUMN_2, COLUMN_3, NUMBER, ZERO }
 
     struct Game {
         address player;
@@ -53,12 +21,13 @@ contract Roulette {
     }
 
     RewardNFT public rewardNFT;
-
     uint256 private _gameIdCounter;
 
     mapping(uint256 => Game) public games;
-
     mapping(address => uint256[]) public playerGames;
+
+    mapping(address => uint256) public winStreak; 
+    mapping(address => uint256) public lastWinAt;
 
     event TicketPurchased(
         address indexed player,
@@ -85,16 +54,30 @@ contract Roulette {
         rewardNFT = RewardNFT(_rewardNFTAddress);
     }
 
+    function getRequiredCooldown(address player) public view returns (uint256) {
+        if (winStreak[player] == 0) return 0;
+        return (2 ** winStreak[player]) * 1 minutes;
+    }
+
+    function getCooldownRemaining(address player) external view returns (uint256) {
+        uint256 cooldown = getRequiredCooldown(player);
+        uint256 nextPlayTime = lastWinAt[player] + cooldown;
+        if (block.timestamp >= nextPlayTime) {
+            return 0;
+        }
+        return nextPlayTime - block.timestamp;
+    }
+
     function buyTicketAndSpin(
         BetType betType,
         uint8 numberBet
     ) external payable returns (uint256) {
 
         require(msg.value == TICKET_PRICE, "Incorrect ticket price");
-
-
         require(numberBet <= 36, "Number must be between 0 and 36");
 
+        uint256 cooldown = getRequiredCooldown(msg.sender);
+        require(block.timestamp >= lastWinAt[msg.sender] + cooldown, "Cooldown exponentiel actif");
 
         if (betType == BetType.NUMBER) {
             require(
@@ -104,7 +87,6 @@ contract Roulette {
         } else if (betType == BetType.ZERO) {
             require(numberBet == 0, "Zero bet must specify number 0");
         }
-
 
         uint256 gameId = _gameIdCounter++;
 
@@ -122,7 +104,7 @@ contract Roulette {
 
         emit TicketPurchased(msg.sender, gameId, betType, numberBet);
 
-
+        // Génération du résultat pseudo-aléatoire (0-36)
         uint8 result = uint8(
             uint256(
                 keccak256(
@@ -145,7 +127,11 @@ contract Roulette {
         emit RouletteSpun(gameId, msg.sender, result, hasWon);
 
         if (hasWon) {
+            winStreak[msg.sender]++;
+            lastWinAt[msg.sender] = block.timestamp;
             _distributeReward(msg.sender, betType, gameId);
+        } else {
+            if (winStreak[msg.sender] > 0) winStreak[msg.sender]--;
         }
 
         return gameId;
