@@ -386,7 +386,7 @@ function Roulette() {
                   
                   {cooldown.winStreak > 0 && (
                     <p style={{ color: "#f59e0b", marginTop: "10px" }}>
-                      🔥 Série: {cooldown.winStreak} victoire{cooldown.winStreak > 1 ? "s" : ""}
+                       Série: {cooldown.winStreak} victoire{cooldown.winStreak > 1 ? "s" : ""}
                     </p>
                   )}
                   {cooldown.isActive && (
@@ -398,7 +398,7 @@ function Roulette() {
                       backgroundColor: "rgba(239, 68, 68, 0.2)",
                       borderRadius: "5px"
                     }}>
-                      ⏳ Cooldown: {formatCooldownTime(cooldown.remainingSeconds)}
+                       Cooldown: {formatCooldownTime(cooldown.remainingSeconds)}
                     </p>
                   )}
                 </div>

@@ -1,11 +1,15 @@
 import { useState, useEffect } from "react";
 import web3Service from "../services/ethersService";
-import tradeService, { TradeOffer, TradeCooldownInfo } from "../services/tradeService";
+import tradeService, {
+  TradeOffer,
+  TradeCooldownInfo,
+} from "../services/tradeService";
 import nftService, { NFTMetadata } from "../services/rewardNFTService";
 import Navigation from "../components/Navigation";
 import { formatAddress } from "../utils/helpers";
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from "../utils/constants";
 import "./Trade.css";
+import ipfsService from "../services/ipfsService";
 
 function Trade() {
   const [walletConnected, setWalletConnected] = useState(false);
@@ -151,7 +155,11 @@ function Trade() {
     }
 
     if (cooldown.isActive) {
-      alert(`Cooldown actif ! Attendez encore ${formatCooldownTime(cooldown.remainingSeconds)}`);
+      alert(
+        `Cooldown actif ! Attendez encore ${formatCooldownTime(
+          cooldown.remainingSeconds,
+        )}`,
+      );
       return;
     }
 
@@ -205,7 +213,9 @@ function Trade() {
       if (error.code === 4001) {
         alert(ERROR_MESSAGES.USER_REJECTED);
       } else if (error.message?.includes("Cooldown")) {
-        alert("Cooldown actif ! Veuillez patienter 5 minutes entre chaque action.");
+        alert(
+          "Cooldown actif ! Veuillez patienter 5 minutes entre chaque action.",
+        );
         loadCooldown();
       } else if (
         error.message?.includes("does not exist") ||
@@ -226,7 +236,11 @@ function Trade() {
     }
 
     if (cooldown.isActive) {
-      alert(`Cooldown actif ! Attendez encore ${formatCooldownTime(cooldown.remainingSeconds)}`);
+      alert(
+        `Cooldown actif ! Attendez encore ${formatCooldownTime(
+          cooldown.remainingSeconds,
+        )}`,
+      );
       return;
     }
 
@@ -242,7 +256,9 @@ function Trade() {
     } catch (error: any) {
       console.error("Erreur annulation offre:", error);
       if (error.message?.includes("Cooldown")) {
-        alert("Cooldown actif ! Veuillez patienter 5 minutes entre chaque action.");
+        alert(
+          "Cooldown actif ! Veuillez patienter 5 minutes entre chaque action.",
+        );
         loadCooldown();
       } else {
         alert("Erreur: " + error.message);
@@ -262,7 +278,11 @@ function Trade() {
     }
 
     if (cooldown.isActive) {
-      alert(`Cooldown actif ! Attendez encore ${formatCooldownTime(cooldown.remainingSeconds)}`);
+      alert(
+        `Cooldown actif ! Attendez encore ${formatCooldownTime(
+          cooldown.remainingSeconds,
+        )}`,
+      );
       return;
     }
 
@@ -316,7 +336,9 @@ function Trade() {
       console.error("Erreur acceptation offre:", error);
 
       if (error.message?.includes("Cooldown")) {
-        alert("Cooldown actif ! Veuillez patienter 5 minutes entre chaque action.");
+        alert(
+          "Cooldown actif ! Veuillez patienter 5 minutes entre chaque action.",
+        );
         loadCooldown();
       } else if (
         error.message?.includes("NotApproved") ||
@@ -381,17 +403,21 @@ function Trade() {
         ) : (
           <>
             {cooldown.isActive && (
-              <div style={{
-                backgroundColor: "rgba(239, 68, 68, 0.2)",
-                border: "1px solid #ef4444",
-                borderRadius: "8px",
-                padding: "12px 20px",
-                marginBottom: "20px",
-                textAlign: "center",
-                color: "#ef4444",
-                fontWeight: "bold",
-              }}>
-                ⏳ Cooldown actif: {formatCooldownTime(cooldown.remainingSeconds)} avant la prochaine action
+              <div
+                style={{
+                  backgroundColor: "rgba(239, 68, 68, 0.2)",
+                  border: "1px solid #ef4444",
+                  borderRadius: "8px",
+                  padding: "12px 20px",
+                  marginBottom: "20px",
+                  textAlign: "center",
+                  color: "#ef4444",
+                  fontWeight: "bold",
+                }}
+              >
+               Cooldown actif:{" "}
+                {formatCooldownTime(cooldown.remainingSeconds)} avant la
+                prochaine action
               </div>
             )}
 
@@ -439,16 +465,31 @@ function Trade() {
                               className={`nft-card ${
                                 selectedMyNFT === nft.tokenId ? "selected" : ""
                               }`}
-                              onClick={() => !cooldown.isActive && setSelectedMyNFT(nft.tokenId)}
-                              style={cooldown.isActive ? { opacity: 0.5, cursor: "not-allowed" } : {}}
+                              onClick={() =>
+                                !cooldown.isActive &&
+                                setSelectedMyNFT(nft.tokenId)
+                              }
+                              style={
+                                cooldown.isActive
+                                  ? { opacity: 0.5, cursor: "not-allowed" }
+                                  : {}
+                              }
                             >
                               <div className="nft-image">
                                 <img
                                   src={nft.imageUrl}
                                   alt={nft.name}
                                   onError={(e) => {
-                                    (e.target as HTMLImageElement).src =
-                                      "https:/via.placeholder.com/150?text=NFT";
+                                    const target = e.target as HTMLImageElement;
+                                    if (!target.src.includes("ipfs.io")) {
+                                      target.src =
+                                        ipfsService.getPublicImageUrl(
+                                          nft.ipfsHash,
+                                        );
+                                    } else {
+                                      target.src =
+                                        "https://via.placeholder.com/200?text=NFT";
+                                    }
                                   }}
                                 />
                               </div>
@@ -494,15 +535,24 @@ function Trade() {
                         className="create-button"
                         onClick={handleCreateOffer}
                         disabled={
-                          loading || selectedMyNFT === null || !requestedNFTId || cooldown.isActive
+                          loading ||
+                          selectedMyNFT === null ||
+                          !requestedNFTId ||
+                          cooldown.isActive
                         }
-                        style={cooldown.isActive ? { opacity: 0.5, cursor: "not-allowed" } : {}}
+                        style={
+                          cooldown.isActive
+                            ? { opacity: 0.5, cursor: "not-allowed" }
+                            : {}
+                        }
                       >
-                        {loading 
-                          ? "Création..." 
-                          : cooldown.isActive 
-                            ? `Attendre ${formatCooldownTime(cooldown.remainingSeconds)}`
-                            : "Créer l'offre"}
+                        {loading
+                          ? "Création..."
+                          : cooldown.isActive
+                          ? `Attendre ${formatCooldownTime(
+                              cooldown.remainingSeconds,
+                            )}`
+                          : "Créer l'offre"}
                       </button>
                     </>
                   )}
@@ -549,8 +599,17 @@ function Trade() {
                                       src={myNFT.imageUrl}
                                       alt={myNFT.name}
                                       onError={(e) => {
-                                        (e.target as HTMLImageElement).src =
-                                          "https://oops.com";
+                                        const target =
+                                          e.target as HTMLImageElement;
+                                        if (!target.src.includes("ipfs.io")) {
+                                          target.src =
+                                            ipfsService.getPublicImageUrl(
+                                              myNFT.ipfsHash,
+                                            );
+                                        } else {
+                                          target.src =
+                                            "https://via.placeholder.com/200?text=NFT";
+                                        }
                                       }}
                                     />
                                     <div>
@@ -588,9 +647,17 @@ function Trade() {
                                 className="cancel-button"
                                 onClick={() => handleCancelOffer(offer.offerId)}
                                 disabled={loading || cooldown.isActive}
-                                style={cooldown.isActive ? { opacity: 0.5, cursor: "not-allowed" } : {}}
+                                style={
+                                  cooldown.isActive
+                                    ? { opacity: 0.5, cursor: "not-allowed" }
+                                    : {}
+                                }
                               >
-                                {cooldown.isActive ? `Attendre ${formatCooldownTime(cooldown.remainingSeconds)}` : "Annuler"}
+                                {cooldown.isActive
+                                  ? `Attendre ${formatCooldownTime(
+                                      cooldown.remainingSeconds,
+                                    )}`
+                                  : "Annuler"}
                               </button>
                             </div>
                           </div>
@@ -656,14 +723,22 @@ function Trade() {
                               <button
                                 className="accept-button"
                                 onClick={() => handleAcceptOffer(offer)}
-                                disabled={loading || !canAccept || cooldown.isActive}
-                                style={(cooldown.isActive && canAccept) ? { opacity: 0.5, cursor: "not-allowed" } : {}}
+                                disabled={
+                                  loading || !canAccept || cooldown.isActive
+                                }
+                                style={
+                                  cooldown.isActive && canAccept
+                                    ? { opacity: 0.5, cursor: "not-allowed" }
+                                    : {}
+                                }
                               >
-                                {!canAccept 
+                                {!canAccept
                                   ? " Vous n'avez pas ce NFT"
-                                  : cooldown.isActive 
-                                    ? `Attendre ${formatCooldownTime(cooldown.remainingSeconds)}`
-                                    : " Accepter l'échange"}
+                                  : cooldown.isActive
+                                  ? `Attendre ${formatCooldownTime(
+                                      cooldown.remainingSeconds,
+                                    )}`
+                                  : " Accepter l'échange"}
                               </button>
                             </div>
                           </div>

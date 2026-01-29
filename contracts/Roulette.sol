@@ -29,6 +29,8 @@ contract Roulette {
     mapping(address => uint256) public winStreak; 
     mapping(address => uint256) public lastWinAt;
 
+    mapping(RewardNFT.RewardType => string) private ipfsHashes;
+
     event TicketPurchased(
         address indexed player,
         uint256 indexed gameId,
@@ -52,6 +54,11 @@ contract Roulette {
 
     constructor(address _rewardNFTAddress) {
         rewardNFT = RewardNFT(_rewardNFTAddress);
+
+        ipfsHashes[RewardNFT.RewardType.COMMON] = "QmTZ9vWJ8iyesqumUR4GzkEyb6KpUhtcEJZi2qjR1wz43Q";
+        ipfsHashes[RewardNFT.RewardType.RARE] = "QmVdaKvrMdvnXyjBsN1CxgLpyGCDv9aYL8YgcGYj5kWCpy";
+        ipfsHashes[RewardNFT.RewardType.EPIC] = "QmNtADXt3aA2PqPXRh6LGGrPaW3m9HJgLTuTmT8MEb5RxE";
+        ipfsHashes[RewardNFT.RewardType.LEGENDARY] = "QmbHBHbrvMYb2B7KkkfXd9N3dixfCa7AWHr9mPfKYweZn3";
     }
 
     function getRequiredCooldown(address player) public view returns (uint256) {
@@ -198,10 +205,10 @@ contract Roulette {
 
         if (betType == BetType.ZERO) {
             rewardType = RewardNFT.RewardType.LEGENDARY;
-            rewardName = "Diamond Teddy - Zero";
+            rewardName = "Legendary Loo";
         } else if (betType == BetType.NUMBER) {
             rewardType = RewardNFT.RewardType.EPIC;
-            rewardName = "Golden Teddy";
+            rewardName = "Epic Matthias";
         } else if (
             betType == BetType.DOZEN_1 ||
             betType == BetType.DOZEN_2 ||
@@ -211,17 +218,17 @@ contract Roulette {
             betType == BetType.COLUMN_3
         ) {
             rewardType = RewardNFT.RewardType.RARE;
-            rewardName = "Silver Teddy";
+            rewardName = "Rare Cat";
         } else {
             rewardType = RewardNFT.RewardType.COMMON;
-            rewardName = "Bronze Teddy";
+            rewardName = "Common Blahaj";
         }
 
         uint256 nftTokenId = rewardNFT.mintReward(
             player,
             rewardName,
             rewardType,
-            "QmPlaceholder"
+            ipfsHashes[rewardType]
         );
 
         emit RewardDistributed(player, gameId, nftTokenId, rewardType);
