@@ -29,7 +29,6 @@ function Roulette() {
   const [cooldown, setCooldown] = useState<CooldownInfo>({
     isActive: false,
     remainingSeconds: 0,
-    winStreak: 0,
   });
 
   const rouletteNumbers = [
@@ -278,10 +277,12 @@ function Roulette() {
         loadBalance();
         loadCooldown(); 
         setIsSpinning(false);
-      }, 4500);
+        setLoading(false);
+      }, 500);
     } catch (error: any) {
       console.error("ERREUR:", error);
       setIsSpinning(false);
+      setLoading(false);
 
       if (error.code === 4001) {
         alert(ERROR_MESSAGES.USER_REJECTED);
@@ -293,8 +294,6 @@ function Roulette() {
       } else {
         alert(ERROR_MESSAGES.UNKNOWN_ERROR + ": " + error.message);
       }
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -381,12 +380,6 @@ function Roulette() {
                       Pari: {getBetTypeName(currentBet.type)}
                       {currentBet.type === BetType.NUMBER &&
                         ` (${currentBet.number})`}
-                    </p>
-                  )}
-                  
-                  {cooldown.winStreak > 0 && (
-                    <p style={{ color: "#f59e0b", marginTop: "10px" }}>
-                       Série: {cooldown.winStreak} victoire{cooldown.winStreak > 1 ? "s" : ""}
                     </p>
                   )}
                   {cooldown.isActive && (

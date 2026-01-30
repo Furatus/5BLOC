@@ -6,9 +6,41 @@ import "./RewardNFT.sol";
 contract Roulette {
     uint256 public constant TICKET_PRICE = 0.01 ether;
 
-    uint8[] private RED_NUMBERS = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
+    uint8[] private RED_NUMBERS = [
+        1,
+        3,
+        5,
+        7,
+        9,
+        12,
+        14,
+        16,
+        18,
+        19,
+        21,
+        23,
+        25,
+        27,
+        30,
+        32,
+        34,
+        36
+    ];
 
-    enum BetType { RED, BLACK, EVEN, ODD, DOZEN_1, DOZEN_2, DOZEN_3, COLUMN_1, COLUMN_2, COLUMN_3, NUMBER, ZERO }
+    enum BetType {
+        RED,
+        BLACK,
+        EVEN,
+        ODD,
+        DOZEN_1,
+        DOZEN_2,
+        DOZEN_3,
+        COLUMN_1,
+        COLUMN_2,
+        COLUMN_3,
+        NUMBER,
+        ZERO
+    }
 
     struct Game {
         address player;
@@ -26,8 +58,8 @@ contract Roulette {
     mapping(uint256 => Game) public games;
     mapping(address => uint256[]) public playerGames;
 
-    mapping(address => uint256) public winStreak; 
     mapping(address => uint256) public lastWinAt;
+    uint256 public constant WIN_COOLDOWN = 1 minutes;
 
     mapping(RewardNFT.RewardType => string) private ipfsHashes;
 
@@ -55,20 +87,28 @@ contract Roulette {
     constructor(address _rewardNFTAddress) {
         rewardNFT = RewardNFT(_rewardNFTAddress);
 
-        ipfsHashes[RewardNFT.RewardType.COMMON] = "QmTZ9vWJ8iyesqumUR4GzkEyb6KpUhtcEJZi2qjR1wz43Q";
-        ipfsHashes[RewardNFT.RewardType.RARE] = "QmVdaKvrMdvnXyjBsN1CxgLpyGCDv9aYL8YgcGYj5kWCpy";
-        ipfsHashes[RewardNFT.RewardType.EPIC] = "QmNtADXt3aA2PqPXRh6LGGrPaW3m9HJgLTuTmT8MEb5RxE";
-        ipfsHashes[RewardNFT.RewardType.LEGENDARY] = "QmbHBHbrvMYb2B7KkkfXd9N3dixfCa7AWHr9mPfKYweZn3";
+        ipfsHashes[
+            RewardNFT.RewardType.COMMON
+        ] = "QmTZ9vWJ8iyesqumUR4GzkEyb6KpUhtcEJZi2qjR1wz43Q";
+        ipfsHashes[
+            RewardNFT.RewardType.RARE
+        ] = "QmVdaKvrMdvnXyjBsN1CxgLpyGCDv9aYL8YgcGYj5kWCpy";
+        ipfsHashes[
+            RewardNFT.RewardType.EPIC
+        ] = "QmNtADXt3aA2PqPXRh6LGGrPaW3m9HJgLTuTmT8MEb5RxE";
+        ipfsHashes[
+            RewardNFT.RewardType.LEGENDARY
+        ] = "QmbHBHbrvMYb2B7KkkfXd9N3dixfCa7AWHr9mPfKYweZn3";
     }
 
-    function getRequiredCooldown(address player) public view returns (uint256) {
-        if (winStreak[player] == 0) return 0;
-        return (2 ** winStreak[player]) * 1 minutes;
-    }
+    function getCooldownRemaining(
+        address player
+    ) external view returns (uint256) {
+        if (lastWinAt[player] == 0) {
+            return 0;
+        }
 
-    function getCooldownRemaining(address player) external view returns (uint256) {
-        uint256 cooldown = getRequiredCooldown(player);
-        uint256 nextPlayTime = lastWinAt[player] + cooldown;
+        uint256 nextPlayTime = lastWinAt[player] + WIN_COOLDOWN;
         if (block.timestamp >= nextPlayTime) {
             return 0;
         }
@@ -79,12 +119,15 @@ contract Roulette {
         BetType betType,
         uint8 numberBet
     ) external payable returns (uint256) {
-
         require(msg.value == TICKET_PRICE, "Incorrect ticket price");
         require(numberBet <= 36, "Number must be between 0 and 36");
 
-        uint256 cooldown = getRequiredCooldown(msg.sender);
-        require(block.timestamp >= lastWinAt[msg.sender] + cooldown, "Cooldown exponentiel actif");
+        if (lastWinAt[msg.sender] > 0) {
+            require(
+                block.timestamp >= lastWinAt[msg.sender] + WIN_COOLDOWN,
+                "Cooldown actif apres victoire"
+            );
+        }
 
         if (betType == BetType.NUMBER) {
             require(
@@ -108,10 +151,8 @@ contract Roulette {
         });
 
         playerGames[msg.sender].push(gameId);
-
         emit TicketPurchased(msg.sender, gameId, betType, numberBet);
 
-        // Génération du résultat pseudo-aléatoire (0-36)
         uint8 result = uint8(
             uint256(
                 keccak256(
@@ -134,11 +175,8 @@ contract Roulette {
         emit RouletteSpun(gameId, msg.sender, result, hasWon);
 
         if (hasWon) {
-            winStreak[msg.sender]++;
             lastWinAt[msg.sender] = block.timestamp;
             _distributeReward(msg.sender, betType, gameId);
-        } else {
-            if (winStreak[msg.sender] > 0) winStreak[msg.sender]--;
         }
 
         return gameId;

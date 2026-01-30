@@ -17,7 +17,6 @@ export interface GameResult {
 export interface CooldownInfo {
   isActive: boolean;
   remainingSeconds: number;
-  winStreak: number;
 }
 
 class RouletteService {
@@ -47,22 +46,21 @@ class RouletteService {
 
   async getCooldownInfo(playerAddress: string): Promise<CooldownInfo> {
     const contract = this.getContract();
-    
+
     try {
-      const remainingSeconds = await contract.getCooldownRemaining(playerAddress);
-      const winStreak = await contract.winStreak(playerAddress);
-      
+      const remainingSeconds = await contract.getCooldownRemaining(
+        playerAddress,
+      );
+
       return {
         isActive: Number(remainingSeconds) > 0,
         remainingSeconds: Number(remainingSeconds),
-        winStreak: Number(winStreak),
       };
     } catch (error) {
       console.error("Erreur getCooldownInfo:", error);
       return {
         isActive: false,
         remainingSeconds: 0,
-        winStreak: 0,
       };
     }
   }
@@ -76,7 +74,7 @@ class RouletteService {
 
     const tx = await contract.buyTicketAndSpin(betType, numberBet, {
       value: ticketPrice,
-      gasLimit: 400000,
+      gasLimit: 500000,
     });
 
     const receipt = await tx.wait();
