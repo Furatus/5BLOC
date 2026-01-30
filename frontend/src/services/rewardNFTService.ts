@@ -2,6 +2,7 @@ import { ethers, Contract } from "ethers";
 import { CONTRACT_ADDRESSES } from "../config/contracts";
 import web3Service from "./ethersService";
 import RewardNFTABI from "../abi/RewardNFT.json";
+import ipfsService from "./ipfsService";
 
 export interface NFTMetadata {
   tokenId: number;
@@ -72,7 +73,7 @@ class NFTService {
               rewardType: Number(metadata.rewardType),
               rewardTypeName: this.REWARD_TYPES[Number(metadata.rewardType)],
               ipfsHash: metadata.ipfsHash,
-              imageUrl: `https://ipfs.io/ipfs/${metadata.ipfsHash}`,
+              imageUrl: ipfsService.getImageUrl(metadata.ipfsHash),
               createdAt: Number(metadata.createdAt),
               owner: address,
             });
@@ -127,7 +128,7 @@ class NFTService {
       rewardType: Number(metadata.rewardType),
       rewardTypeName: this.REWARD_TYPES[Number(metadata.rewardType)],
       ipfsHash: metadata.ipfsHash,
-      imageUrl: `https://ipfs.io/ipfs/${metadata.ipfsHash}`,
+      imageUrl: ipfsService.getImageUrl(metadata.ipfsHash),
       createdAt: Number(metadata.createdAt),
       owner,
     };
