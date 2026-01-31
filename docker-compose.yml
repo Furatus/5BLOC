@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  dapp:
+    build: .
+    container_name: 5bloc-dapp
+    ports:
+      - "8545:8545" 
+      - "5173:5173" 
+    volumes:
+      - ./contracts:/app/contracts
+      - ./frontend/src:/app/frontend/src
+      - ./scripts:/app/scripts
+      - dapp-node-modules:/app/node_modules
+      - frontend-node-modules:/app/frontend/node_modules
+    networks:
+      - blockchain-network
+    depends_on:
+      - ipfs
+
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: 5bloc-ipfs
+    ports:
+      - "4001:4001"   
+      - "5001:5001"   
+      - "8080:8080"   
+    volumes:
+      - ./ipfs-data:/data/ipfs
+      - ./ipfs-staging:/export
+    environment:
+      - IPFS_PROFILE=server
+    networks:
+      - blockchain-network
+
+networks:
+  blockchain-network:
+    driver: bridge
+
+volumes:
+  dapp-node-modules:
+  frontend-node-modules:
