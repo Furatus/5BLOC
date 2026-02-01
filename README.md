@@ -698,13 +698,62 @@ npx hardhat coverage
 
 ---
 
-## Installation et déploiement
+# Installation et déploiement
+
+> Qu'importe la méthode de déploiement que vous choisissez, les deux adresses http (front) sont :
+>
+> - `http://localhost:5173` (Front-end, serveur vite)
+> - `http://localhost:5001/webui` (interface web ipfs)
 
 ### Prérequis
 
-- Node.js >= 18
-- Docker & Docker Compose (optionnel mais recommandé)
-- MetaMask ou un autre wallet Ethereum
+- Node.js >= 24 (Pour un lancement manuel et tests) (Non-recommandé)
+- Docker & Docker Compose (Recommandé)
+- MetaMask ou un autre wallet Ethereum (Seul MetaMask a été testé à 100%)
+
+## Avec Docker (Méthode fortement conseillé)
+
+```bash
+# Construire et démarrer tous les services
+docker-compose up --build -d # Ne pas detach (-d) si vous n'avez pas les adresses communes hardhat
+
+# Voir les logs
+docker-compose logs -f
+
+# Arrêter
+docker-compose down
+```
+
+Services lancés :
+
+- Hardhat Node : Port 8545 (conteneur node)
+- IPFS : Ports 5001 (API) et 8080 (Gateway) (conteneur ipfs)
+- Frontend : Port 5173 (conteneur node)
+
+> Les images ne sont pas déployées automatiquement dans ipfs, si aucune node ipfs ne peut fournir les images (ce qui est hautement probable), Allez sur : http://localhost:5001/webui -> Files (rubrique dans la colonne à gauche) -> + Import -> Selectionner toutes les images dans le dossier "nft_images" (ne pas inclure le fichier json, qui regroupe uniquement les cid des différents fichiers jpg).
+
+Il est aussi important de noter que le déploiement par docker ne permet pas nativement d'éxécuter les tests hardhat. Pour lancer les tests, il faut :
+```bash
+# Ouvrir un shell à l'intérieur du conteneur node
+docker exec -it 5bloc-dapp /bin/sh
+
+# Puis une fois seulement à l'intérieur du conteneur, utiliser
+cd /app
+npx hardhat test
+```
+Si vous avez déjà node sur votre machine, il est dans ce cas plus facile de lancer les tests directement (et vous permet aussi d'accéder directement à l'html du coverage) :
+
+```bash
+# à la racine du projet
+npx test hardhat
+
+# pour coverage
+npx hardhat coverage
+```
+
+---
+
+## Lancement et déploiement manuel à l'aide de node (Déconseillé)
 
 ### Installation locale
 
@@ -771,27 +820,6 @@ Cela copie les ABIs et adresses des contrats dans `frontend/src/`.
 cd frontend
 npm run dev
 ```
-
-L'application est accessible sur `http://localhost:5173`
-
-### Avec Docker Compose
-
-```bash
-# Construire et démarrer tous les services
-docker-compose up -d
-
-# Voir les logs
-docker-compose logs -f
-
-# Arrêter
-docker-compose down
-```
-
-Services lancés :
-
-- Hardhat Node : Port 8545
-- IPFS : Ports 5001 (API) et 8080 (Gateway)
-- Frontend : Port 5173
 
 ### Configuration de MetaMask
 

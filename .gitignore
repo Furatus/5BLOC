@@ -26,3 +26,7 @@ deployments/
 # IPFS data (local)
 ipfs-data/
 ipfs-staging/
+
+# Coverage report test hardhat
+coverage/
+coverage.json
