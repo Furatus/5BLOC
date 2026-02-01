@@ -129,7 +129,7 @@ Le destinataire peut :
 
 **Blockchain & Smart Contracts**
 
-- Solidity 0.8.20
+- Solidity 0.8.28
 - Hardhat (framework de développement)
 - OpenZeppelin Contracts (ERC-721, Ownable)
 - Ethers.js v6 (interaction blockchain)
@@ -367,7 +367,7 @@ modifier withCooldown() {
 - Truffle : Moins actif, moins de fonctionnalités modernes
 - Foundry : Excellent mais courbe d'apprentissage plus raide (Rust-based)
 
-#### **Solidity 0.8.20**
+#### **Solidity 0.8.28**
 
 **Pourquoi cette version ?**
 
